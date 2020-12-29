@@ -2,6 +2,9 @@
 # Various ESP32-Arduino samples and projects
 #
 # 
+#   SerialLog
+#       - Logging helper
+#       - singleton wrapper around Serial.prints with timestamps
 #   LoopTimer
 #       - Performance profiling for loop()
 #       - Reports on number of calls/sec over the specified reporting interval

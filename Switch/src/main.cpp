@@ -1,16 +1,3 @@
-#include <Arduino.h>
-#include "Switch.h"
-
-unsigned long g_start_ms;
-
-void serial_log(String msg) {
-    // TODO: do wraparound check
-    unsigned long elapsed = millis() - g_start_ms;
-    float elapsed_secs = (float)(elapsed)/1000.f;
-    Serial.println(String(elapsed_secs, 3) + ": " + msg);
-}
-
-
 // The circuit:
 // - button-switch attached from pin to +3V3
 //  - this sets pin HIGH when button-switch is closed
@@ -40,6 +27,11 @@ void serial_log(String msg) {
            ║   EN           μUSB           BOOT  ║      
            ╚═════════════════════════════════════╝      
 */
+
+#include <Arduino.h>
+#include "Switch.h"
+#include "../../SerialLog/include/SerialLog.h"
+
 //-----------------------------------------------------------------
 
 Switch buttonSwitch(T0); // Touch0 = GPIO04
@@ -48,9 +40,9 @@ Switch buttonSwitch(T0); // Touch0 = GPIO04
 // - put your setup code here, to run once:
 void setup() {
     Serial.begin(115200); // for serial link back to computer
-
     pinMode(LED_BUILTIN, OUTPUT); // LED will follow switch state
-    g_start_ms = millis();
+
+    SerialLog::log(__FILE__);
 }
 
 // Then this loop runs forever

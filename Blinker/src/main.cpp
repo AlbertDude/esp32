@@ -1,16 +1,3 @@
-#include <Arduino.h>
-#include "../../LoopTimer/src/LoopTimer.h"
-#include "Blinker.h"
-
-unsigned long g_start_ms;
-
-void serial_log(String msg) {
-    // TODO: do wraparound check
-    unsigned long elapsed = millis() - g_start_ms;
-    float elapsed_secs = (float)(elapsed)/1000.f;
-    Serial.println(String(elapsed_secs, 3) + ": " + msg);
-}
-
 //-----------------------------------------------------------------
 /*
       ╔═════════════════════════════════════╗      
@@ -38,6 +25,11 @@ void serial_log(String msg) {
 
 */
 
+#include <Arduino.h>
+#include "Blinker.h"
+#include "../../LoopTimer/include/LoopTimer.h"
+#include "../../SerialLog/include/SerialLog.h"
+
 LoopTimer loopTimer;
 
 #define USE_TICKER (1)
@@ -54,7 +46,7 @@ Blinker extLed(T3, 300);              // Touch3 = GPIO15
 // -  put your setup code here, to run once:
 void setup() {
     Serial.begin(115200); // for serial link back to computer
-    g_start_ms = millis();
+    SerialLog::log(__FILE__);
 }
 
 // Then this loop runs repeatedly forever

@@ -1,8 +1,7 @@
 #pragma once
 
-#include "../../Ticker/src/Ticker.h"
-
-void serial_log(String msg);
+#include "../../SerialLog/include/SerialLog.h"
+#include "../../Ticker/include/Ticker.h"
 
 // LED Blinker class
 // - toggles specified GPIO pin at specified interval
@@ -26,7 +25,7 @@ public:
         if((m_prevToggle == 0) || (now >= m_prevToggle + m_interval_ms)){
             m_ledState = (m_ledState == LOW) ? HIGH : LOW;
             digitalWrite(m_pin, m_ledState); //
-            serial_log("Toggled LED");
+            SerialLog::log("Toggled LED");
             m_prevToggle = now;
         }
     }

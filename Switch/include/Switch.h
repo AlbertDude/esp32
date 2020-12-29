@@ -1,6 +1,3 @@
-#pragma once
-
-void serial_log(String msg);
 
 // Switch reading helper class
 // - Provides debounced high/low readings for interfacing with electrical switches
@@ -25,14 +22,16 @@ void serial_log(String msg);
 // During the RISING & FALLING states, the switch is in a debounce phase and may advance to the
 // next state or retreat to the previous.
 
+#pragma once
+
+#include "../../SerialLog/include/SerialLog.h"
+
 class Switch
 {
 public:
 
     Switch(uint8_t pin)
     : m_pin(pin)
-    , m_state(State_Undefined)
-    , m_prevState(State_Undefined)
     {
         // TODO: check that pin is valid GPIO
         pinMode(pin, INPUT); // Set specified pin to be an INPUT
@@ -86,7 +85,7 @@ public:
                     if( millis() > m_debounceStart + debounceDelay)
                     {
                         m_state = State_High;
-                        serial_log("Transiting to HIGH state");
+                        SerialLog::log("Transiting to HIGH state");
                     }
                 }
                 break;
@@ -108,7 +107,7 @@ public:
                     if( millis() > m_debounceStart + debounceDelay)
                     {
                         m_state = State_Low;
-                        serial_log("Transiting to LOW state");
+                        SerialLog::log("Transiting to LOW state");
                     }
                 }
                 break;
@@ -129,8 +128,8 @@ private:
     };
 
     uint8_t m_pin;
-    State m_state;
-    State m_prevState;
+    State m_state = State_Undefined;
+    State m_prevState = State_Undefined;
     unsigned long m_debounceStart;
     static const unsigned long debounceDelay = 50;    // in millis
 };

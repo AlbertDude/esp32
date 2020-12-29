@@ -1,6 +1,6 @@
 #pragma once
 
-void serial_log(String msg);
+#include "../../SerialLog/include/SerialLog.h"
 
 // Performance profiling for loop()
 // - Reports on number of calls/sec over the specified reporting interval
@@ -21,8 +21,8 @@ public:
         m_callCount++;
         if(now >= m_prevReporting_ms + m_reportingInterval_ms)
         {
-            serial_log("Over past period (" + String(m_reportingInterval_ms) +
-                    " ms), loop() rate (call/s) = " + String((float)m_callCount / (m_reportingInterval_ms*1000)) );
+            SerialLog::log("Over past period (" + String(m_reportingInterval_ms) +
+                    " ms), loop() rate (call/s) = " + String((float)m_callCount / m_reportingInterval_ms * 1000.f) );
             m_prevReporting_ms = now;
             m_callCount = 0;
         }
