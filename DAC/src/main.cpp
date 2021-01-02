@@ -41,7 +41,7 @@ SPKR   ▽     │      ┌───║BYPASS        IN-║
             - beyond that, playback seems slowed down, guessing it's a limitation of the timer rate
     Dac  - polling-based driver (need to regularly call ::loop())
         - good up to about 22 kHz (w/ 8 bit data buffer) before hear slow down
-            - hear pops at all rates though -- think it's due to serial prints??
+            - hear pops at all rates though -- seems to be caused by serial prints
             - realistically, this would make this implementation not-usable in any real apps
 
 - TODO: characterize sound-quality vs. DacDS implementation (8-bit data only)
@@ -129,23 +129,27 @@ void dac_ramp()
 }
 
 
-// Pick DAC variant to use
-// - each can be set independently (4 combos)
-#define USE_DACDS (1)
-#define USE_TICKER (0)
+// Pick test mode
+// - only define one
+//#define TEST_MODE_CYCLE_8B_SAMPRATES
+#define TEST_MODE_CYCLE_16B_SAMPRATES
+//#define TEST_MODE_CYCLE_BITDEPTHS
 
-#if USE_DACDS
-#  if USE_TICKER
-#    error "No timer-based DacDS (yet)"
-#  else
-#    define DAC DacDS
-#  endif
+// Pick DAC variant to use
+// - only define one
+// - each can be set independently (4 combos)
+//#define USE_DACDS
+//#define USE_DACT
+#define USE_DAC
+
+#if defined USE_DACDS
+#  define DAC DacDS
+#elif defined USE_DACT
+#  define DAC DacT
+#elif defined USE_DAC
+#  define DAC Dac
 #else
-#  if USE_TICKER
-#    define DAC DacT
-#  else
-#    define DAC Dac
-#  endif
+#  error "Must define one of USE_DAC*"
 #endif
 
 
@@ -266,12 +270,6 @@ static_assert( NUM_SAMPRATES == NUM_BUFS08, "Number of items should match" );
 static_assert( NUM_SAMPRATES == NUM_BUFS16, "Number of items should match" );
 
 
-// Test modes
-// - only define one
-//#define TEST_MODE_CYCLE_8B_SAMPRATES
-#define TEST_MODE_CYCLE_16B_SAMPRATES
-//#define TEST_MODE_BITDEPTHS
-
 LoopTimer loopTimer;
 Switch buttonSwitch(T0); // Touch0 = GPIO04
 
@@ -283,10 +281,50 @@ void setup()
     SerialLog::log(__FILE__);
 }
 
+#if defined TEST_MODE_CYCLE_8B_SAMPRATES || defined TEST_MODE_CYCLE_16B_SAMPRATES 
+const void * get_buf_params( unsigned int &sampleRate, unsigned int &bitDepth, unsigned int &bufLen )
+{
+    static int index = 9999;    // definitely more than the real number of buffers 
+                                // - so after first increment we'll start at 0
+
+    index++;
+    if( index >= NUM_SAMPRATES )
+        index = 0;
+
+#  if defined TEST_MODE_CYCLE_8B_SAMPRATES
+    const void *pBuf = sampRateBufs08[index];
+    sampleRate = sampRates[index];
+    bitDepth = 8;
+    bufLen = bufLens08[index];
+#  elif defined TEST_MODE_CYCLE_16B_SAMPRATES
+    const void *pBuf = sampRateBufs16[index];
+    sampleRate = sampRates[index];
+    bitDepth = 16;
+    bufLen = bufLens16[index];
+#  endif
+
+    return pBuf;
+}
+#endif
+
+            
+DAC * get_DAC(unsigned int sampleRate, bool looped, const void * pBuf, unsigned int bufLen, unsigned int bitDepth)
+{
+# if defined USE_DACDS
+    return new DAC(sampleRate, looped, pBuf, bufLen, bitDepth);
+# else
+    // either USE_DAC or USE_DACT
+    return new DAC(DAC1, sampleRate, looped, pBuf, bufLen, bitDepth);
+# endif
+}
+
+
 // Then this loop runs forever
 // put your main code here, to run repeatedly:
 void loop()
 {
+    // TODO: characterize loopTimer counts for various options: Dac, DacT, DacDS
+    // - below values are out-of-date
     loopTimer.loop();   // typically 401400 calls/sec (LOOPED_MODE)
                         // typically 629300 calls/sec (non-LOOPED_MODE & not playing)
                         // w/ Ticker:
@@ -317,44 +355,24 @@ void loop()
         // start next playback on switch transition from high->low
         if( was_high )
         {
-#if defined TEST_MODE_CYCLE_8B_SAMPRATES
-            static int index = 0;
-            const void *pBuf = sampRateBufs08[index];
-            unsigned int sample_rate = sampRates[index];
-            unsigned int bitdepth = 8;
-            unsigned int bufLen = bufLens08[index];
-#elif defined TEST_MODE_CYCLE_16B_SAMPRATES
-            static int index = 0;
-            const void *pBuf = sampRateBufs16[index];
-            unsigned int sample_rate = sampRates[index];
-            unsigned int bitdepth = 16;
-            unsigned int bufLen = bufLens16[index];
-#endif
-
+            // get the buffer and its params
+            unsigned int sampleRate;
+            unsigned int bitDepth;
+            unsigned int bufLen;
+            const void *pBuf = get_buf_params( sampleRate, bitDepth, bufLen );  // implementation depends on TEST_MODE_*
             SerialLog::log( "bufLen: " + String(bufLen) );
-
             assert(bufLen > 1000);  // in case the above sizeof isn't doing what I hoped...
 
             // create new dac instance to play the buffer
             assert( dac == nullptr );
-#         if USE_DACDS
-            dac = new DAC(sample_rate, LOOPED, pBuf, bufLen, bitdepth);
-#         else
-            dac = new DAC(DAC1, sample_rate, LOOPED, pBuf, bufLen, bitdepth);
-#         endif
+            dac = get_DAC(sampleRate, LOOPED, pBuf, bufLen, bitDepth);  // implementation depends on USE_DAC*
+            SerialLog::log( "Set samplerate/bitDepth: " + String(sampleRate) + "/" + String(bitDepth));
 
-            SerialLog::log( "Set samplerate/bitdepth: " + String(sample_rate) + "/" + String(bitdepth));
-
-#if defined TEST_MODE_CYCLE_8B_SAMPRATES || defined TEST_MODE_CYCLE_16B_SAMPRATES 
-            index++;
-            if( index >= NUM_SAMPRATES )
-                index = 0;
-#endif
             was_high = false;
         }
 
-#     if !USE_TICKER
-        // non-ticker implementation require pumping the ::loop() method
+#     if defined USE_DAC || defined USE_DACDS
+        // non-ticker implementation requires pumping the ::loop() method
         if( dac )
             dac->loop();
 #     endif

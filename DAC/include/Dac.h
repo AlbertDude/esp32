@@ -112,6 +112,7 @@ public:
             m_prevToggle = now;
 
             // TEST-CODE: report DAC outputs
+#if 0
             {
                 static const int REPORTING_INTERVAL = 10000;  // log every N DAC output periods
                 static int count = 0;
@@ -123,6 +124,7 @@ public:
                     count = 0;
                 }
             }
+#endif
         }
     }
 
