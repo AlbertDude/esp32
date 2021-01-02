@@ -131,8 +131,8 @@ void dac_ramp()
 
 // Pick DAC variant to use
 // - each can be set independently (4 combos)
-#define USE_DACDS (0)
-#define USE_TICKER (1)
+#define USE_DACDS (1)
+#define USE_TICKER (0)
 
 #if USE_DACDS
 #  if USE_TICKER
@@ -151,40 +151,6 @@ void dac_ramp()
 
 //-----------------------------------------------------------------
 
-// Two modes:
-// - looped buffer
-//  - which is initialized with an Fs/8 full amplitude square wave
-//  - this could form the basis of a realtime/streamed data implementation
-// - single-shot buffer
-//  - on initialization (also via pressing the EN button) randomly plays one of the seven compiled in PCM data buffers
-#define USE_LOOPED_MODE 0
-
-#if USE_LOOPED_MODE
-#error "TODO: LOOPED_MODE is out-of-date and probably broken"
-
-//-----------------------------------
-// Test buffer
-static const unsigned int TEST_BUF_LEN = 1000;
-uint8_t testBuf[TEST_BUF_LEN] = {0};
-
-// Test function that initializes the output buffer with Fs/8 full-amplitude square wave
-void InitTestBuf()
-{
-    assert(TEST_BUF_LEN%8 == 0);  // want buffer evenly divisible by 8 for seamless looping
-    for(int i=0; i<TEST_BUF_LEN; i+=8)
-    {
-        testBuf[i+0] = 0;
-        testBuf[i+1] = 0;
-        testBuf[i+2] = 0;
-        testBuf[i+3] = 0;
-        testBuf[i+4] = 255;
-        testBuf[i+5] = 255;
-        testBuf[i+6] = 255;
-        testBuf[i+7] = 255;
-    }
-}
-
-#else // USE_LOOPED_MODE
 
 //-----------------------------------
 // PCM data files
@@ -299,19 +265,6 @@ const unsigned int sampRates[] = {
 static_assert( NUM_SAMPRATES == NUM_BUFS08, "Number of items should match" );
 static_assert( NUM_SAMPRATES == NUM_BUFS16, "Number of items should match" );
 
-#endif // USE_LOOPED_MODE
-
-
-#if USE_LOOPED_MODE
-
-DAC dac(DAC1, SAMPLE_RATE, true, testBuf, TEST_BUF_LEN);    // looped
-
-#else
-
-DAC *dac = nullptr;
-
-#endif // USE_LOOPED_MODE
-
 
 // Test modes
 // - only define one
@@ -327,12 +280,7 @@ Switch buttonSwitch(T0); // Touch0 = GPIO04
 void setup()
 {
     Serial.begin(115200); // for serial link back to computer
-
     SerialLog::log(__FILE__);
-
-#if USE_LOOPED_MODE
-    InitTestBuf();
-#endif
 }
 
 // Then this loop runs forever
@@ -349,7 +297,11 @@ void loop()
 
     buttonSwitch.loop();
 
+    static const bool LOOPED = false;
+
+    static DAC *dac = nullptr;
     static bool was_high = false;
+
     if(buttonSwitch.isHigh())
     {
         // kill the previous dac instance
@@ -386,9 +338,9 @@ void loop()
             // create new dac instance to play the buffer
             assert( dac == nullptr );
 #         if USE_DACDS
-            dac = new DAC(sample_rate, false, pBuf, bufLen, bitdepth);
+            dac = new DAC(sample_rate, LOOPED, pBuf, bufLen, bitdepth);
 #         else
-            dac = new DAC(DAC1, sample_rate, false, pBuf, bufLen, bitdepth);
+            dac = new DAC(DAC1, sample_rate, LOOPED, pBuf, bufLen, bitdepth);
 #         endif
 
             SerialLog::log( "Set samplerate/bitdepth: " + String(sample_rate) + "/" + String(bitdepth));
