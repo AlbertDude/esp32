@@ -255,7 +255,11 @@ private:
 // semaphore that is signaled by Ticker fcn.
 // - this complication needed since the i2s_write() call crashes if called from the Ticker fcn
 // (hence the need to run this polled)
-#include "AudioOutputI2SNoDAC.h"
+
+// NOTE: finding that #includers of "../../DAC/include/Dac.h" needs to explicitly do the next include as well!
+// - seems that VSCode or platform.io or Arduino does a limited scan to determine what libs it
+// thinks it needs to incorporate...
+#include <AudioOutputI2SNoDAC.h>
 class DacDS
 {
 public:

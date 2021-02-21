@@ -16,11 +16,24 @@
 #   Switch
 #       - Switch reading helper class
 #       - Provides debounced high/low readings for interfacing with electrical switches
-
 #   DAC
+#       - press switch to advance to next play item
+#       - DAC audio output
+#       - A few output options
+#           - 8-bit DAC output polled-implementation
+#           - 8-bit DAC output ticker-implementation
+#               - drives speaker audio amp circuit (e.g. LM386)
+#           - 1-bit sigma-delta output 
+#               - drives speaker via 1R-1Q circuit
+#   Player
+#       - press switch to advance to next play item
+#       - uses DacT audio output
+#       - cycles thru some 8kHz 8-bit audio tracks
+#
+
+
 #   TTS
 #   myAudio
 #   mySAM
 #   myTTS
 
-#   Player1
