@@ -29,11 +29,21 @@
 #       - press switch to advance to next play item
 #       - uses DacT audio output
 #       - cycles thru some 8kHz 8-bit audio tracks
-#
-
-
+#   mySAM
+#       - usage of SAM TTS, speaking several canned phrases with the available voices
+#       - press switch to advance to thru phrases
+#           - when all phrases spoken, changes to next voice
+#       - generate PCM to memory and then plays memory out to DAC
+#       - quality not great but GEFN (Good Enough For Now)
+#           - SQ does have some variance among the voices
+### 
+# On deck:
+#   web server? - web i/f to enter speech phrases
+#   terminal/ssh server? - basically way to get remote keyboard input
+#   myTTS
+#       - hoping provides better sound quality than SAM
 #   TTS
 #   myAudio
-#   mySAM
-#   myTTS
+#       - my version of PlayWAVFromPROGMEM.cpp from the ESP8266Audio package
+#       - plays out the viola sample
 

@@ -1,8 +1,9 @@
 #include <Arduino.h>
 // NOTE: next include needed in this file despite it not being used directly (it is needed by Dac.h)
-// - seems that VSCode or platform.io or Arduino ?scans this file? to determine what libs are needed
-// - it should really recurse the headers to see that Dac.h includes this... or the needed libs
-// should be explicitly listed
+// - seems that VSCode or platform.io scans only the current folder to determine what libs are needed
+// - so if you include a header outside of the current folder, it won't pick up any additional dependencies
+// - it should really recurse the headers to see that Dac.h includes this... 
+// - or perhaps it has an option to explicitly specify the needed libs?
 #include <AudioOutputI2SNoDAC.h>
 #include "../../DAC/include/Dac.h"
 #include "../../Switch/include/Switch.h"
