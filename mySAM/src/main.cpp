@@ -10,23 +10,24 @@
 
 //-----------------------------------------------------------------
 
+//#define USE_DACDS
+#ifdef USE_DACDS
+DacDS dac(22050, false);    // one-shot
+#else
 DacT dac(DAC1, 22050, false);    // one-shot
+#endif
 LoopTimer loopTimer;
 Switch buttonSwitch(T0); // Touch0 = GPIO04
 
 AudioOutputMonoBuffer *out = NULL;
 ESP8266SAM *sam = nullptr;
 
-/*
-  enum SAMVoice { VOICE_SAM, VOICE_ELF, VOICE_ROBOT, VOICE_STUFFY, VOICE_OLDLADY, VOICE_ET };
-  void SetVoice(enum SAMVoice voice);
-*/
 const ESP8266SAM::SAMVoice voices[] = {
   ESP8266SAM::VOICE_SAM, 
   ESP8266SAM::VOICE_ELF, 
-  ESP8266SAM::VOICE_ROBOT, 
+  ESP8266SAM::VOICE_ROBOT,          // kinda like this one
   ESP8266SAM::VOICE_STUFFY, 
-  ESP8266SAM::VOICE_OLDLADY, 
+  ESP8266SAM::VOICE_OLDLADY,        // and this one
   ESP8266SAM::VOICE_ET
 };
 const unsigned int numVoices = sizeof(voices)/sizeof(voices[0]);
@@ -40,12 +41,12 @@ const char* voiceNames[] = {
   "ET"
 };
 
-
 void setup() {
     // This runs on powerup
     // put your setup code here, to run once:
     Serial.begin(115200); // for serial link back to computer
     SerialLog::log(__FILE__);
+    SerialLog::log("in setup(), Voice Index: " + String(voiceIndex));
 
     pinMode(LED_BUILTIN, OUTPUT); // LED will follow switch state
 
@@ -129,7 +130,7 @@ void loop() {
                     SerialLog::log("buf ovrflw: " + String(out->GetNumBufOverflows()));
                     SerialLog::log("sample range: " + String(out->minVal) + " -> " + String(out->maxVal));
 
-                    dac.setBuffer(out->GetBuf(), out->GetBufUsed());
+                    dac.setBuffer(out->GetBuf(), out->GetBufUsed(), out->bps);
                     dac.restart();
                     state = State_Low;
                 }
@@ -138,6 +139,10 @@ void loop() {
                 assert(false);  // Bad State
         };
     }
+#   if defined USE_DACDS
+    // non-ticker implementation requires pumping the ::loop() method
+    dac.loop();
+#   endif
 }
 
 // vim: sw=4:ts=4
