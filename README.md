@@ -25,6 +25,7 @@
 #               - drives speaker audio amp circuit (e.g. LM386)
 #           - 1-bit sigma-delta output 
 #               - drives speaker via 1R-1Q circuit
+#       - also provides a DacVisualizer class to visualize the audio data that is being played
 #   Player
 #       - press switch to advance to next play item
 #       - uses DacT audio output

@@ -1,3 +1,87 @@
+/*
+ * DAC Audio Output implementations
+ * - either via 8-bit DAC outputs "DAC1" or "DAC2"
+ * - or via a 1-bit delta-sigma output to I2SOut
+
+ 
+              ╔═════════════════════════════════════╗      
+              ║            ESP-WROOM-32             ║      
+              ║               Devkit                ║      
+              ║                                     ║      
+              ║EN /                         MOSI/D23║      
+              ║VP /A0                        SCL/D22║──I2SOut
+              ║VN /A3                         TX/TX0║      
+              ║D34/A6                         RX/RX0║      
+              ║D35/A7                        SDA/D21║      
+              ║D32/A4,T9                    MISO/D19║      
+              ║D33/A5,T8                     SCK/D18║      
+        DAC1──║D25/A18,DAC1                   SS/ D5║      
+              ║D26/A19,DAC2                     /TX2║      
+              ║D27/A17,T7                       /RX2║      
+              ║D14/A16,T6                 T0,A10/ D4║      
+              ║D12/A15,T5     LED_BUILTIN,T2,A12/ D2║
+              ║D13/A14,T4                 T3,A13/D15║
+              ║GND/                             /GND║
+         VIN──║VIN/                             /3V3║
+              ║                                     ║      
+              ║   EN           μUSB           BOOT  ║      
+              ╚═════════════════════════════════════╝      
+
+Driving speaker from 8-bit DAC output + LM386 amplifier:
+See: https://hackaday.com/2016/12/07/you-can-have-my-lm386s-when-you-pry-them-from-my-cold-dead-hands/
+
+                        ╔═════════════════╗        
+       220u +           ║      LM386      ║        
+    ╲║────C──┬──────────║Vout          GND║─┬─┐       DAC1 (from ESP DevKit)
+    ╱║─┐   C,47n 5V,VIN─║Vs            IN+║─┘ ▽        │
+SPKR   ▽     │      ┌───║BYPASS        IN-║───────────▶R,10k
+           R,10  C,100n ║GAIN,8     1,GAIN║            │
+             │      │   ║        ◯        ║            ▽
+             ▽      ▽   ╚═════════════════╝        
+
+- Two options:
+    DacT - timer-based driver
+        - good up to about 16 kHz (w/ either 8/16 bit data buffer)
+            - beyond that, playback seems slowed down, guessing it's a limitation of the timer rate
+    Dac  - polling-based driver (need to regularly call ::loop())
+        - good up to about 22 kHz (w/ 8 bit data buffer) before hear slow down
+            - hear pops at all rates though -- seems to be caused by serial prints
+            - realistically, this would make this implementation not-usable in any real apps
+
+- TODO: characterize sound-quality vs. DacDS implementation (8-bit data only)
+    - incomplete evaluation
+    - prelim thoughts:
+        - 8 bit DAC sounds better
+            - smoother, less harsh
+        - i.e. the DacDS seems to have a harsh sound to it
+
+
+Driving speaker from delta-sigma I2S output + output transistor and resistor:
+See: https://github.com/earlephilhower/ESP8266Audio/#software-i2s-delta-sigma-dac-ie-playing-music-with-a-single-transistor-and-speaker
+
+                            ╔═════════╗        
+                           ╔╝  2N3904 ╚╗     
+                           ║   (NPN)   ║        
+                           ║           ║        
+                           ║  E  B  C  ║         
+                           ╚═══════════╝           
+                              │  │  └──────║╱
+                              ▽  │     ┌───║╲
+        I2SOut ────────R─────────┘     │      SPKR 
+  (from ESP DevKit)    1k            5V,VIN            
+
+- One option:
+    DacDS  - polling-based driver (need to regularly call ::loop())
+        - good all the way up to 44.1 kHz (w/ 8 bit data buffer)
+        - good all the way up to 44.1 kHz (w/ 16 bit data buffer)
+            - lower samplerates sound both noisy and distorted in the high freqs
+            - starts to sound decent @ 24 kHz, but even so the steps to 32 kHz and then 44.1 kHz both easy to discern improved sound quality
+
+- TODO: characterize sound-quality 8-bit vs 16-bit
+- TODO: implement ticker-based implementation
+    - based on experience with Dac & DacT, seems like ticker won't be able to support higher samplerates
+*/
+
 #pragma once
 
 #include "../../SerialLog/include/SerialLog.h"
@@ -17,6 +101,18 @@ uint8_t convert16to8(int16_t int16_val)
     return (uint8_t)int16_val;
 }
 
+// Interface class to DAC functionality
+// - initial use-case is for DacVisualizer
+class IDac
+{
+    public:
+        virtual bool isPlaying() = 0;
+        virtual unsigned int getCurrentPos() = 0;
+        virtual const void * getDataBuffer() = 0;
+        virtual unsigned int getDataBufferLen() = 0;
+        virtual unsigned int getBitsPerSample() = 0;
+        virtual unsigned int getSamplerate() = 0;
+};
 
 // Polled 8-bit DAC implementation
 // - user needs to call ::loop() periodically at a rate faster than the output sampling rate.
@@ -25,7 +121,7 @@ uint8_t convert16to8(int16_t int16_val)
 // - ALSO NOTE:
 //  - this implementation uses micros() which will roll over every 70 mins or so, so beware of random glitch
 //  - another reason to use DacT instead
-class Dac
+class Dac : public IDac
 {
 public:
     Dac(uint8_t dacPin, unsigned int samplingFreqHz, bool loop=true, const void *buffer=nullptr, unsigned int bufLen=0, unsigned int bitsPerSample=8)
@@ -42,6 +138,7 @@ public:
         // e.g. 20 kHz => 50 us output interval
         // e.g. 25 kHz => 40 us output interval
         m_interval = 1000000 / samplingFreqHz;
+        m_samplerate = samplingFreqHz;
 
         if( buffer != nullptr )
         {
@@ -51,6 +148,35 @@ public:
             restart();
         }
     }
+
+    virtual ~Dac() {}
+
+    // IDac Interface begin
+    virtual bool isPlaying() override
+    {
+        return (m_done == false);
+    }
+    virtual unsigned int getCurrentPos() override
+    {
+        return m_bufIndex;
+    }
+    virtual const void * getDataBuffer() override
+    {
+        return m_buffer;
+    }
+    virtual unsigned int getDataBufferLen() override
+    {
+        return m_bufLen;
+    }
+    virtual unsigned int getBitsPerSample() override
+    {
+        return m_bitsPerSample;
+    }
+    virtual unsigned int getSamplerate() override
+    {
+        return m_samplerate;
+    }
+    // IDac Interface end
 
     // Intended to restart one-shot (ie. non-looped) mode
     void restart()
@@ -139,12 +265,13 @@ private:
     unsigned int m_bufLen;
     bool m_loop;
     unsigned int m_bitsPerSample;
+    unsigned int m_samplerate;
     bool m_done;
 };
 
 // Timer/Ticker-based 8-bit DAC implementation
-// - ::loop() is periodically called automatically via the Ticker/TImer mechanism
-// - so user doesn't need to worry about periodic ::loop() calls
+// - ::_loop() is periodically called automatically via the Ticker/Timer mechanism
+// - ::loop() is provided as a dummy fcn for IDac API requirements but user doesn't need to call it
 class DacT
 {
 public:
@@ -172,7 +299,7 @@ public:
         // e.g. 25 kHz => 40 us output interval
         uint32_t interval_us = 1000000 / samplingFreqHz;
 
-        m_ticker.attach_us<DacT *>(interval_us, DacT::loop, this);
+        m_ticker.attach_us<DacT *>(interval_us, DacT::_loop, this);
     }
 
     ~DacT()
@@ -198,10 +325,17 @@ public:
             SerialLog::log( "Using 8-bit DAC to output data with bitdepth: " + String(bitsPerSample) );
         m_bufIndex = 0;
     }
+
+    // Dummy implementation to fulfill IDac API requirements.  User doesn't need to call it
+    void loop()
+    {
+        return;
+    }
+
     unsigned int m_bufIndex;  // public access to allow peeking
 
 private:
-    static void loop(DacT *instance)
+    static void _loop(DacT *instance)
     {
         if (instance->m_done)
             return;

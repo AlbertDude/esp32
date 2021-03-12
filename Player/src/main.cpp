@@ -6,6 +6,7 @@
 // - or perhaps it has an option to explicitly specify the needed libs?
 #include <AudioOutputI2SNoDAC.h>
 #include "../../DAC/include/Dac.h"
+#include "../../DAC/include/DacVisualizer.h"
 #include "../../Switch/include/Switch.h"
 #include "../../LoopTimer/include/LoopTimer.h"
 #include "../../SerialLog/include/SerialLog.h"
@@ -61,7 +62,10 @@ unsigned int pcmBufSzs[] =
 
 unsigned int numBufs = sizeof(pcmBufSzs)/sizeof(pcmBufSzs[0]);
 
-DacT dac(DAC1, 8000, false);    // one-shot
+// TODO: switched to plain Dac for testing viz
+//DacT dac(DAC1, 8000, false);    // one-shot
+Dac dac(DAC1, 8000, false);    // one-shot
+DacVisualizer viz(&dac);
 Switch buttonSwitch(T0); // Touch0 = GPIO04
 LoopTimer loopTimer;
 
@@ -113,6 +117,7 @@ void loop()
                     index = index % numBufs;
                     dac.setBuffer(pcmBufs[index], pcmBufSzs[index]);
                     dac.restart();
+                    viz.reset(&dac);
                     digitalWrite(LED_BUILTIN, LOW);
                     state = State_Low;
                 }
@@ -120,6 +125,8 @@ void loop()
             default:
                 assert(false);  // Bad State
         };
+        dac.loop(); // TODO: exclude for DacT
+        viz.loop();
     }
 }
 

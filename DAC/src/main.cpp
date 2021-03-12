@@ -45,6 +45,11 @@ SPKR   ▽     │      ┌───║BYPASS        IN-║
             - realistically, this would make this implementation not-usable in any real apps
 
 - TODO: characterize sound-quality vs. DacDS implementation (8-bit data only)
+    - incomplete evaluation
+    - prelim thoughts:
+        - 8 bit DAC sounds better
+            - smoother, less harsh
+        - i.e. the DacDS seems to have a harsh sound to it
 
 
 Driving speaker from delta-sigma I2S output + output transistor and resistor:
@@ -76,6 +81,7 @@ See: https://github.com/earlephilhower/ESP8266Audio/#software-i2s-delta-sigma-da
 
 #include <Arduino.h>
 #include "Dac.h"
+#include "DacVisualizer.h"
 #include "../../SerialLog/include/SerialLog.h"
 #include "../../LoopTimer/include/LoopTimer.h"
 #include "../../Switch/include/Switch.h"
@@ -131,8 +137,8 @@ void dac_ramp()
 
 // Pick test mode
 // - only define one
-//#define TEST_MODE_CYCLE_8B_SAMPRATES
-#define TEST_MODE_CYCLE_16B_SAMPRATES
+#define TEST_MODE_CYCLE_8B_SAMPRATES
+//#define TEST_MODE_CYCLE_16B_SAMPRATES
 //#define TEST_MODE_CYCLE_BITDEPTHS
 
 // Pick DAC variant to use
@@ -318,6 +324,8 @@ DAC * get_DAC(unsigned int sampleRate, bool looped, const void * pBuf, unsigned 
 # endif
 }
 
+DacVisualizer viz;
+
 
 // Then this loop runs forever
 // put your main code here, to run repeatedly:
@@ -366,6 +374,7 @@ void loop()
             // create new dac instance to play the buffer
             assert( dac == nullptr );
             dac = get_DAC(sampleRate, LOOPED, pBuf, bufLen, bitDepth);  // implementation depends on USE_DAC*
+            viz.reset(dac);
             SerialLog::log( "Set samplerate/bitDepth: " + String(sampleRate) + "/" + String(bitDepth));
 
             was_high = false;
@@ -376,6 +385,8 @@ void loop()
         if( dac )
             dac->loop();
 #     endif
+        if( dac )
+            viz.loop();
     }
 
     //dac_ramp();
