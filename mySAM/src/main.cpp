@@ -7,15 +7,17 @@
 #include "../../LoopTimer/include/LoopTimer.h"
 #include "../../Switch/include/Switch.h"
 #include "../../DAC/include/Dac.h"
+#include "../../DAC/include/DacVisualizer.h"
 
 //-----------------------------------------------------------------
 
 //#define USE_DACDS
 #ifdef USE_DACDS
-DacDS dac(22050, false);    // one-shot
+DacDS dac(22050, false /* looped */);
 #else
-DacT dac(DAC1, 22050, false);    // one-shot
+Dac dac(DAC1, 22050, false /* looped */);
 #endif
+DacVisualizer viz;
 LoopTimer loop_timer;
 Switch button_switch(T0); // Touch0 = GPIO04
 
@@ -97,19 +99,17 @@ void loop() {
             case kLow:
                 if(button_switch.IsHigh())
                 {
-                    digitalWrite(LED_BUILTIN, HIGH);
+                    //digitalWrite(LED_BUILTIN, HIGH);
                     state = kHigh;
                 }
                 break;
             case kHigh:
                 if(button_switch.IsLow())
                 {
-                    digitalWrite(LED_BUILTIN, LOW);
-                    phrase_index++;
-
+                    //digitalWrite(LED_BUILTIN, LOW);
                     out->Reset();
+                    phrase_index++;
                     phrase_index = phrase_index % kNumPhrases;
-
                     if(phrase_index == 0)
                     {
                         voice_index++;
@@ -122,8 +122,7 @@ void loop() {
                     SerialLog::Log("--------------------");
                     SerialLog::Log("Phrase: " + String(phrases[phrase_index]));
 
-                    // This seems to be a blocking call
-                    // i.e. buffer is complete upon return
+                    // This is a blocking call, i.e. buffer is complete upon return
                     sam->Say(out, phrases[phrase_index]);
                     SerialLog::Log("buf Hz, bsp, #ch: " + String(out->hertz) + ", " + String(out->bps) + ", " + String(out->channels));
                     SerialLog::Log("buf used: " + String(out->GetBufUsed()));
@@ -132,6 +131,7 @@ void loop() {
 
                     dac.SetBuffer(out->GetBuf(), out->GetBufUsed(), out->bps);
                     dac.Restart();
+                    viz.Reset(&dac);
                     state = kLow;
                 }
                 break;
@@ -140,6 +140,7 @@ void loop() {
         };
     }
     dac.Loop();
+    viz.Loop();
 }
 
 // vim: sw=4:ts=4

@@ -102,25 +102,27 @@ public:
 
     void Loop()
     {
-        assert( dac_instance_ );
-        unsigned int cur_sample_pos = dac_instance_->GetCurrentPos();
-        if( cur_sample_pos < m_buffer_len )
+        if( dac_instance_ )
         {
-            if( (int)cur_sample_pos >= m_interval_progress_point )
+            unsigned int cur_sample_pos = dac_instance_->GetCurrentPos();
+            if( cur_sample_pos < m_buffer_len )
             {
-                unsigned int value = _CalcValue();
-                _Visualize(value);
-                //_DebugVisualize(value);
-                _IncrementInterval();
-                is_active_ = true;
+                if( (int)cur_sample_pos >= m_interval_progress_point )
+                {
+                    unsigned int value = _CalcValue();
+                    _Visualize(value);
+                    //_DebugVisualize(value);
+                    _IncrementInterval();
+                    is_active_ = true;
+                }
             }
-        }
-        else
-        {
-            if( is_active_ )
+            else
             {
-                _Visualize(0);
-                is_active_ = false;
+                if( is_active_ )
+                {
+                    _Visualize(0);
+                    is_active_ = false;
+                }
             }
         }
     }
