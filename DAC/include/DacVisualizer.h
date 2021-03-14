@@ -57,37 +57,37 @@ public:
         {
             pinMode(m_output_pins[i], OUTPUT);
         }
-        visualize(0);
+        _Visualize(0);
     }
 
-    DacVisualizer(IDac *dacInstance)
+    DacVisualizer(IDac *dac_instance)
         : DacVisualizer()
     {
-        assert( dacInstance != nullptr );
-        m_DacInstance = dacInstance;
+        assert( dac_instance != nullptr );
+        dac_instance_ = dac_instance;
     }
 
-    void reset(IDac *dacInstance)
+    void Reset(IDac *dac_instance)
     {
-        assert( dacInstance != nullptr );
-        m_DacInstance = dacInstance;
-        m_active = false;
+        assert( dac_instance != nullptr );
+        dac_instance_ = dac_instance;
+        is_active_ = false;
 
-        m_window_duration = (unsigned int) (WINDOW_DURATION_S * m_DacInstance->getSamplerate());
-        m_window_overlap = (unsigned int) (WINDOW_OVERLAP_FRACTION * m_window_duration);
-        m_window_interval = m_window_duration - m_window_overlap;
+        window_duration_ = (unsigned int) (WINDOW_DURATION_S * dac_instance_->GetSamplerate());
+        window_overlap_  = (unsigned int) (WINDOW_OVERLAP_FRACTION * window_duration_);
+        window_interval_ = window_duration_ - window_overlap_;
 
-        m_buffer_len = m_DacInstance->getDataBufferLen();
+        m_buffer_len = dac_instance_->GetDataBufferLen();
 
         unsigned int max_amp;
-        if( m_DacInstance->getBitsPerSample() == 8 )
+        if( dac_instance_->GetBitsPerSample() == 8 )
         {
             m_dc_ofs = 128;
             max_amp = 128;
         }
         else
         {
-            assert( m_DacInstance->getBitsPerSample() == 16 );
+            assert( dac_instance_->GetBitsPerSample() == 16 );
             m_dc_ofs = 0;
             max_amp = 32768;
         }
@@ -95,16 +95,42 @@ public:
         m_iscale = (max_amp / m_num_levels) + (max_amp % m_num_levels != 0);    // ceil (max_amp/#levels)
 
         m_interval_index = 0;
-        _update_interval_range();
+        _UpdateIntervalRange();
     }
 
     ~DacVisualizer() {}
 
-    void _update_interval_range()
+    void Loop()
     {
-        m_interval_end   = (m_interval_index+1) * m_window_interval;
-        m_interval_start =  (int)m_interval_end - (int)m_window_duration;
-        //SerialLog::log( "Interval start,end:" + String(m_interval_start) + ", " + String(m_interval_end) );
+        assert( dac_instance_ );
+        unsigned int cur_sample_pos = dac_instance_->GetCurrentPos();
+        if( cur_sample_pos < m_buffer_len )
+        {
+            if( (int)cur_sample_pos >= m_interval_progress_point )
+            {
+                unsigned int value = _CalcValue();
+                _Visualize(value);
+                //_DebugVisualize(value);
+                _IncrementInterval();
+                is_active_ = true;
+            }
+        }
+        else
+        {
+            if( is_active_ )
+            {
+                _Visualize(0);
+                is_active_ = false;
+            }
+        }
+    }
+
+private:
+    void _UpdateIntervalRange()
+    {
+        m_interval_end   = (m_interval_index+1) * window_interval_;
+        m_interval_start =  (int)m_interval_end - (int)window_duration_;
+        //SerialLog::Log( "Interval start,end:" + String(m_interval_start) + ", " + String(m_interval_end) );
 
         // "start" progress-point
         m_interval_progress_point = m_interval_start;
@@ -117,13 +143,13 @@ public:
 
     }
 
-    void increment_interval()
+    void _IncrementInterval()
     {
         m_interval_index++;
-        _update_interval_range();
+        _UpdateIntervalRange();
     }
 
-    void _find_extrema(unsigned int start_idx, unsigned int end_idx, int & max_val, int & min_val)
+    void _FindExtrema(unsigned int start_idx, unsigned int end_idx, int & max_val, int & min_val)
     {
         assert( start_idx >= 0 );
         assert( start_idx < end_idx );
@@ -132,9 +158,9 @@ public:
         int min_so_far = 100000;
         int max_so_far = -100000;
 
-        if( m_DacInstance->getBitsPerSample() == 8 )
+        if( dac_instance_->GetBitsPerSample() == 8 )
         {
-            const uint8_t * p8 = reinterpret_cast<const uint8_t*>(m_DacInstance->getDataBuffer());
+            const uint8_t * p8 = reinterpret_cast<const uint8_t*>(dac_instance_->GetDataBuffer());
             for( auto i=start_idx; i<end_idx; i++ )
             {
                 if( p8[i] > max_so_far )
@@ -145,8 +171,8 @@ public:
         }
         else
         {
-            assert( m_DacInstance->getBitsPerSample() == 16 );
-            const int16_t * p16 = reinterpret_cast<const int16_t*>(m_DacInstance->getDataBuffer()); 
+            assert( dac_instance_->GetBitsPerSample() == 16 );
+            const int16_t * p16 = reinterpret_cast<const int16_t*>(dac_instance_->GetDataBuffer()); 
             for( auto i=start_idx; i<end_idx; i++ )
             {
                 if( p16[i] > max_so_far )
@@ -159,7 +185,7 @@ public:
         min_val = min_so_far;
     }
 
-    unsigned int calc_value()
+    unsigned int _CalcValue()
     {
         unsigned int ret_val = 0;
 
@@ -172,11 +198,11 @@ public:
             // e.g. for "gameOverMan.wav"
             return ret_val;
         }
-        //SerialLog::log( "Interval idxs:" + String(start_idx) + ", " + String(end_idx) );
+        //SerialLog::Log( "Interval idxs:" + String(start_idx) + ", " + String(end_idx) );
 
         int max_val;
         int min_val;
-        _find_extrema(start_idx, end_idx, max_val, min_val);
+        _FindExtrema(start_idx, end_idx, max_val, min_val);
         max_val -= m_dc_ofs;
         min_val -= m_dc_ofs;
         int max_amp = max(max_val, abs(min_val));
@@ -188,7 +214,7 @@ public:
         return ret_val;
     }
 
-    void visualize(unsigned int value)
+    void _Visualize(unsigned int value)
     {
         assert( value < m_num_levels );
         int i=1;
@@ -202,11 +228,11 @@ public:
         }
     }
 
-    void debug_visualize(unsigned int value)
+    void _DebugVisualize(unsigned int value)
     {
         assert( value < m_num_levels );
 
-        //SerialLog::log( "Value: " + String(value) );
+        //SerialLog::Log( "Value: " + String(value) );
 #if 1
         // Debug diagnostics
         // - 2-ended bar-graph style
@@ -219,44 +245,22 @@ public:
             out_str += ">";
         for( int i=0; i<m_num_levels - value; i++ )
             out_str += " ";
-        SerialLog::log( out_str );
+        SerialLog::Log( out_str );
 #endif
     }
 
-    void loop()
-    {
-        assert( m_DacInstance );
-        unsigned int cur_sample_pos = m_DacInstance->getCurrentPos();
-        if( cur_sample_pos < m_buffer_len ) // TODO: not sure if this is correct logic
-        {
-            if( (int)cur_sample_pos >= m_interval_progress_point )
-            {
-                unsigned int value = calc_value();
-                visualize(value);
-                //debug_visualize(value);
-                increment_interval();
-                m_active = true;
-            }
-        }
-        else
-        {
-            if( m_active )
-            {
-                visualize(0);
-                m_active = false;
-            }
-        }
-    }
 
 private:
-    IDac *m_DacInstance = nullptr;
+    IDac *dac_instance_ = nullptr;
     static const unsigned int m_num_levels = 6;
     uint8_t m_output_pins[m_num_levels] = {0xff, 16, 17, 18, 19, 21};
-    unsigned int m_window_duration;
-    unsigned int m_window_overlap;
-    unsigned int m_window_interval;
+
+    unsigned int window_duration_;  // in samples
+    unsigned int window_overlap_;   // in samples
+    unsigned int window_interval_;  // in samples
 
     unsigned int m_buffer_len;
+
     unsigned int m_dc_ofs = 0;
     unsigned int m_iscale;
 
@@ -264,7 +268,8 @@ private:
     unsigned int m_interval_end;
     int m_interval_start;
     int m_interval_progress_point;
-    bool m_active = false;
+
+    bool is_active_ = false;
 };
 
 // vim: sw=4:ts=4

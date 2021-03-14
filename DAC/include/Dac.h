@@ -91,14 +91,14 @@ See: https://github.com/earlephilhower/ESP8266Audio/#software-i2s-delta-sigma-da
 // Helpers
 
 // Convert int16_t sample to uint8_t sample
-uint8_t convert16to8(int16_t int16_val)
+uint8_t ConvertSampleTo8Bit(int16_t i16_val)
 {
     // input value in range [-32768, 32767]
-    int16_val >>= 8; // reduce range to [-128, 127]
-    int16_val += 128; // range [0, 255]
-    assert( int16_val >= 0 );
-    assert( int16_val <= 255 );
-    return (uint8_t)int16_val;
+    i16_val >>= 8; // reduce range to [-128, 127]
+    i16_val += 128; // range [0, 255]
+    assert( i16_val >= 0 );
+    assert( i16_val <= 255 );
+    return (uint8_t)i16_val;
 }
 
 // Interface class to DAC functionality
@@ -106,12 +106,12 @@ uint8_t convert16to8(int16_t int16_val)
 class IDac
 {
     public:
-        virtual bool isPlaying() = 0;
-        virtual unsigned int getCurrentPos() = 0;
-        virtual const void * getDataBuffer() = 0;
-        virtual unsigned int getDataBufferLen() = 0;
-        virtual unsigned int getBitsPerSample() = 0;
-        virtual unsigned int getSamplerate() = 0;
+        virtual bool IsPlaying() = 0;
+        virtual unsigned int GetCurrentPos() = 0;
+        virtual const void * GetDataBuffer() = 0;
+        virtual unsigned int GetDataBufferLen() = 0;
+        virtual unsigned int GetBitsPerSample() = 0;
+        virtual unsigned int GetSamplerate() = 0;
 };
 
 // Polled 8-bit DAC implementation
@@ -124,118 +124,118 @@ class IDac
 class Dac : public IDac
 {
 public:
-    Dac(uint8_t dacPin, unsigned int samplingFreqHz, bool loop=true, const void *buffer=nullptr, unsigned int bufLen=0, unsigned int bitsPerSample=8)
-    : m_loop(loop)
-    , m_bitsPerSample(bitsPerSample)
-    , m_done(true)
+    Dac(uint8_t dac_pin, unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=8)
+        : looped_(looped)
+        , bits_per_sample_(bits_per_sample)
+        , done_(true)
     {
         // Verify DAC pin was specified
-        assert((dacPin==DAC1) || (dacPin==DAC2));
-        m_dacPin = dacPin;
+        assert( (dac_pin == DAC1) || (dac_pin == DAC2) );
+        dac_pin_ = dac_pin;
 
         // best to pick outputFreq that divides into 1000 sans remainder
         // e.g. 10 kHz => 100 us output interval
         // e.g. 20 kHz => 50 us output interval
         // e.g. 25 kHz => 40 us output interval
-        m_interval = 1000000 / samplingFreqHz;
-        m_samplerate = samplingFreqHz;
+        time_interval_ = 1000000 / samplerate_Hz;
+        samplerate_ = samplerate_Hz;
 
         if( buffer != nullptr )
         {
-            assert(bufLen > 0 );
+            assert(buffer_len > 0 );
 
-            setBuffer(buffer, bufLen, bitsPerSample);
-            restart();
+            SetBuffer(buffer, buffer_len, bits_per_sample);
+            Restart();
         }
     }
 
     virtual ~Dac() {}
 
     // IDac Interface begin
-    virtual bool isPlaying() override
+    virtual bool IsPlaying() override
     {
-        return (m_done == false);
+        return (done_ == false);
     }
-    virtual unsigned int getCurrentPos() override
+    virtual unsigned int GetCurrentPos() override
     {
-        return m_bufIndex;
+        return buffer_pos_;
     }
-    virtual const void * getDataBuffer() override
+    virtual const void * GetDataBuffer() override
     {
-        return m_buffer;
+        return buffer_;
     }
-    virtual unsigned int getDataBufferLen() override
+    virtual unsigned int GetDataBufferLen() override
     {
-        return m_bufLen;
+        return buffer_len_;
     }
-    virtual unsigned int getBitsPerSample() override
+    virtual unsigned int GetBitsPerSample() override
     {
-        return m_bitsPerSample;
+        return bits_per_sample_;
     }
-    virtual unsigned int getSamplerate() override
+    virtual unsigned int GetSamplerate() override
     {
-        return m_samplerate;
+        return samplerate_;
     }
     // IDac Interface end
 
     // Intended to restart one-shot (ie. non-looped) mode
-    void restart()
+    void Restart()
     {
-        m_done = false;
-        m_bufIndex = 0;
-        m_prevToggle = 0;
+        done_ = false;
+        buffer_pos_ = 0;
+        time_prev_toggle_ = 0;
     }
 
     // Intended to change content for one-shot (ie. non-looped) mode
-    void setBuffer(const void *buffer, unsigned int bufLen, unsigned int bitsPerSample=8)
+    void SetBuffer(const void *buffer, unsigned int buffer_len, unsigned int bits_per_sample=8)
     {
         assert(buffer);
-        m_buffer = buffer;
-        m_bufLen = bufLen;
-        m_bitsPerSample = bitsPerSample;
-        if( bitsPerSample != 8 )
-            SerialLog::log( "Using 8-bit DAC to output data with bitdepth: " + String(bitsPerSample) );
-        m_bufIndex = 0;
+        buffer_ = buffer;
+        buffer_len_ = buffer_len;
+        bits_per_sample_ = bits_per_sample;
+        if( bits_per_sample != 8 )
+            SerialLog::Log( "Using 8-bit DAC to output data with bitdepth: " + String(bits_per_sample) );
+        buffer_pos_ = 0;
     }
 
-    void loop()
+    void Loop()
     {
-        if (m_done)
+        if (done_)
             return;
 
-        unsigned long now = micros();
-        if((m_prevToggle == 0) || (now >= m_prevToggle + m_interval))
+        unsigned long time_now = micros();
+        if((time_prev_toggle_ == 0) || (time_now >= time_prev_toggle_ + time_interval_))
         {
             uint8_t sample_val;
-            if( m_bitsPerSample == 8 )
+            if( bits_per_sample_ == 8 )
             {
-                const uint8_t *pBuf = (uint8_t*)m_buffer;
-                sample_val = pBuf[m_bufIndex];
+                const uint8_t *buf = (uint8_t*)buffer_;
+                sample_val = buf[buffer_pos_];
             }
             else
             {
-                assert( m_bitsPerSample == 16 );
-                const int16_t *pBuf = (int16_t*)m_buffer;
-                int16_t int16_val = pBuf[m_bufIndex];
-                sample_val = convert16to8(int16_val);
+                assert( bits_per_sample_ == 16 );
+                const int16_t *buf = (int16_t*)buffer_;
+                int16_t i16_val = buf[buffer_pos_];
+                sample_val = ConvertSampleTo8Bit(i16_val);
             }
 
-            dacWrite(m_dacPin, sample_val);
-            m_bufIndex++;
-            if(m_bufIndex >= m_bufLen)
+            dacWrite(dac_pin_, sample_val);
+            buffer_pos_++;
+            if(buffer_pos_ >= buffer_len_)
             {
-                if( m_loop )
+                if( looped_ )
                 {
-                    m_bufIndex = 0;
+                    buffer_pos_ = 0;
                 }
                 else
                 {
-                    m_done = true;
-                    SerialLog::log("DAC is done");
+                    done_ = true;
+                    SerialLog::Log("DAC is done");
                 }
             }
 
-            m_prevToggle = now;
+            time_prev_toggle_ = time_now;
 
             // TEST-CODE: report DAC outputs
 #if 0
@@ -246,7 +246,7 @@ public:
                 count++;
                 if( count >= REPORTING_INTERVAL )
                 {
-                    SerialLog::log(String(REPORTING_INTERVAL) + " DAC output intervals");
+                    SerialLog::Log(String(REPORTING_INTERVAL) + " DAC output intervals");
                     count = 0;
                 }
             }
@@ -254,42 +254,40 @@ public:
         }
     }
 
-
-    unsigned int m_bufIndex;  // public access to allow peeking
-
 private:
-    unsigned m_interval;  // interval in micro secs
-    uint8_t m_dacPin;
-    unsigned long m_prevToggle;
-    const void *m_buffer;
-    unsigned int m_bufLen;
-    bool m_loop;
-    unsigned int m_bitsPerSample;
-    unsigned int m_samplerate;
-    bool m_done;
+    uint8_t dac_pin_;
+    unsigned time_interval_;  // interval in micro secs
+    unsigned long time_prev_toggle_;
+    const void *buffer_;
+    unsigned int buffer_len_;
+    unsigned int buffer_pos_;  // public access to allow peeking
+    bool looped_;
+    unsigned int bits_per_sample_;
+    unsigned int samplerate_;
+    bool done_;
 };
 
 // Timer/Ticker-based 8-bit DAC implementation
-// - ::_loop() is periodically called automatically via the Ticker/Timer mechanism
+// - ::_Loop() is periodically called automatically via the Ticker/Timer mechanism
 // - ::loop() is provided as a dummy fcn for IDac API requirements but user doesn't need to call it
 class DacT
 {
 public:
-    DacT(uint8_t dacPin, unsigned int samplingFreqHz, bool loop=true, const void *buffer=nullptr, unsigned int bufLen=0, unsigned int bitsPerSample=8)
-    : m_loop(loop)
-    , m_bitsPerSample(bitsPerSample)
-    , m_done(true)
+    DacT(uint8_t dac_pin, unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=8)
+    : looped_(looped)
+    , bits_per_sample_(bits_per_sample)
+    , done_(true)
     {
         // Verify DAC pin was specified
-        assert((dacPin==DAC1) || (dacPin==DAC2));
-        m_dacPin = dacPin;
+        assert( (dac_pin == DAC1) || (dac_pin == DAC2) );
+        dac_pin_ = dac_pin;
 
         if( buffer != nullptr )
         {
-            assert(bufLen > 0 );
+            assert(buffer_len > 0);
 
-            setBuffer(buffer, bufLen, bitsPerSample);
-            restart();
+            SetBuffer(buffer, buffer_len, bits_per_sample);
+            Restart();
         }
 
         // best to pick outputFreq that divides into 1000 sans remainder
@@ -297,9 +295,9 @@ public:
         // e.g. 10 kHz => 100 us output interval
         // e.g. 20 kHz => 50 us output interval
         // e.g. 25 kHz => 40 us output interval
-        uint32_t interval_us = 1000000 / samplingFreqHz;
+        uint32_t interval_us = 1000000 / samplerate_Hz;
 
-        m_ticker.attach_us<DacT *>(interval_us, DacT::_loop, this);
+        m_ticker.attach_us<DacT *>(interval_us, DacT::_Loop, this);
     }
 
     ~DacT()
@@ -308,64 +306,62 @@ public:
     }
 
     // Intended to restart one-shot (ie. non-looped) mode
-    void restart()
+    void Restart()
     {
-        m_done = false;
-        m_bufIndex = 0;
+        done_ = false;
+        buffer_pos_ = 0;
     }
 
     // Intended to change content for one-shot (ie. non-looped) mode
-    void setBuffer(const void *buffer, unsigned int bufLen, unsigned int bitsPerSample=8)
+    void SetBuffer(const void *buffer, unsigned int buffer_len, unsigned int bits_per_sample=8)
     {
         assert(buffer);
-        m_buffer = buffer;
-        m_bufLen = bufLen;
-        m_bitsPerSample = bitsPerSample;
-        if( bitsPerSample != 8 )
-            SerialLog::log( "Using 8-bit DAC to output data with bitdepth: " + String(bitsPerSample) );
-        m_bufIndex = 0;
+        buffer_ = buffer;
+        buffer_len_ = buffer_len;
+        bits_per_sample_ = bits_per_sample;
+        if( bits_per_sample != 8 )
+            SerialLog::Log( "Using 8-bit DAC to output data with bitdepth: " + String(bits_per_sample) );
+        buffer_pos_ = 0;
     }
 
     // Dummy implementation to fulfill IDac API requirements.  User doesn't need to call it
-    void loop()
+    void Loop()
     {
         return;
     }
 
-    unsigned int m_bufIndex;  // public access to allow peeking
-
 private:
-    static void _loop(DacT *instance)
+    static void _Loop(DacT *instance)
     {
-        if (instance->m_done)
+        if (instance->done_)
             return;
 
         uint8_t sample_val;
-        if( instance->m_bitsPerSample == 8 )
+        if( instance->bits_per_sample_ == 8 )
         {
-            const uint8_t *pBuf = (uint8_t*)instance->m_buffer;
-            sample_val = pBuf[instance->m_bufIndex];
+            const uint8_t *buf = (uint8_t*)instance->buffer_;
+            sample_val = buf[instance->buffer_pos_];
         }
         else
         {
-            assert( instance->m_bitsPerSample == 16 );
-            const int16_t *pBuf = (int16_t*)instance->m_buffer;
-            int16_t int16_val = pBuf[instance->m_bufIndex];
-            sample_val = convert16to8(int16_val);
+            assert( instance->bits_per_sample_ == 16 );
+            const int16_t *buf = (int16_t*)instance->buffer_;
+            int16_t i16_val = buf[instance->buffer_pos_];
+            sample_val = ConvertSampleTo8Bit(i16_val);
         }
         
-        dacWrite(instance->m_dacPin, sample_val);
-        instance->m_bufIndex++;
-        if(instance->m_bufIndex >= instance->m_bufLen)
+        dacWrite(instance->dac_pin_, sample_val);
+        instance->buffer_pos_++;
+        if(instance->buffer_pos_ >= instance->buffer_len_)
         {
-            if( instance->m_loop )
+            if( instance->looped_ )
             {
-                instance->m_bufIndex = 0;
+                instance->buffer_pos_ = 0;
             }
             else
             {
-                instance->m_done = true;
-                SerialLog::log("DAC is done");
+                instance->done_ = true;
+                SerialLog::Log("DAC is done");
             }
         }
     }
@@ -374,12 +370,13 @@ private:
 private:
     Ticker m_ticker;
 
-    uint8_t m_dacPin;
-    const void *m_buffer;
-    unsigned int m_bufLen;
-    bool m_loop;
-    unsigned int m_bitsPerSample;
-    bool m_done;
+    uint8_t dac_pin_;
+    const void *buffer_;
+    unsigned int buffer_len_;
+    unsigned int buffer_pos_;  // public access to allow peeking
+    bool looped_;
+    unsigned int bits_per_sample_;
+    bool done_;
 };
 
 // Polled Delta-Sigma DAC implementation
@@ -390,28 +387,28 @@ private:
 // - this complication needed since the i2s_write() call crashes if called from the Ticker fcn
 // (hence the need to run this polled)
 
-// NOTE: finding that #includers of "../../DAC/include/Dac.h" needs to explicitly do the next include as well!
+// NOTE: finding that #includes of "../../DAC/include/Dac.h" needs to explicitly do the next include as well!
 // - seems that VSCode or platform.io or Arduino does a limited scan to determine what libs it
 // thinks it needs to incorporate...
 #include <AudioOutputI2SNoDAC.h>
 class DacDS
 {
 public:
-    DacDS(unsigned int samplingFreqHz, bool loop=true, const void *buffer=nullptr, unsigned int bufLen=0, unsigned int bitsPerSample=16)
-    : m_samplingFreqHz(samplingFreqHz)
-    , m_bitsPerSample(bitsPerSample)
-    , m_loop(loop)
-    , m_done(true)
+    DacDS(unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=16)
+    : samplerate_Hz_(samplerate_Hz)
+    , bits_per_sample_(bits_per_sample)
+    , looped_(looped)
+    , done_(true)
     {
-        m_I2SOutput = new AudioOutputI2SNoDAC();    // TODO: see if compiler supports shared_ptr, I think it does...
-        assert(m_I2SOutput);
+        i2s_output_ = new AudioOutputI2SNoDAC();    // TODO: see if compiler supports shared_ptr, I think it does...
+        assert(i2s_output_);
 
         if( buffer != nullptr )
         {
-            assert(bufLen > 0 );
+            assert(buffer_len > 0 );
 
-            setBuffer(buffer, bufLen, bitsPerSample);
-            restart();
+            SetBuffer(buffer, buffer_len, bits_per_sample);
+            Restart();
         }
 
 #if 0
@@ -420,7 +417,7 @@ public:
         // e.g. 10 kHz => 100 us output interval
         // e.g. 20 kHz => 50 us output interval
         // e.g. 25 kHz => 40 us output interval
-        uint32_t interval_us = 1000000 / samplingFreqHz;
+        uint32_t interval_us = 1000000 / samplerate_Hz;
 
 //      m_ticker.attach_us<DacDS *>(interval_us, loop, this);
 #endif
@@ -431,74 +428,73 @@ public:
 #if 0
         m_ticker.detach();
 #endif
-        if( m_I2SOutput )
+        if( i2s_output_ )
         {
-            m_I2SOutput->stop();
-            delete m_I2SOutput;
+            i2s_output_->stop();
+            delete i2s_output_;
         }
     }
 
     // Intended to restart one-shot (ie. non-looped) mode
-    void restart()
+    void Restart()
     {
-        m_done = false;
-        m_bufIndex = 0;
+        done_ = false;
+        buffer_pos_ = 0;
 
-        if( m_I2SOutput )
+        if( i2s_output_ )
         {
             bool ret;
-            ret = m_I2SOutput->SetRate( m_samplingFreqHz );
+            ret = i2s_output_->SetRate( samplerate_Hz_ );
             assert( ret );
             // 8->16 bit conversion handled in this class, so underlying AudioOutputI2SNoDAC always @ 16 bits
-            ret = m_I2SOutput->SetBitsPerSample( 16 );
+            ret = i2s_output_->SetBitsPerSample( 16 );
             assert( ret );
-            ret = m_I2SOutput->SetChannels( 1 );
+            ret = i2s_output_->SetChannels( 1 );
             assert( ret );
-            ret = m_I2SOutput->begin();
+            ret = i2s_output_->begin();
             assert( ret );
         }
     }
 
     // Intended to change content for one-shot (ie. non-looped) mode
-    void setBuffer(const void *buffer, unsigned int bufLen, unsigned int bitsPerSample=16)
+    void SetBuffer(const void *buffer, unsigned int buffer_len, unsigned int bits_per_sample=16)
     {
         assert(buffer);
-        m_buffer = buffer;
-        m_bufLen = bufLen;
-        m_bitsPerSample = bitsPerSample;
-        m_bufIndex = 0;
+        buffer_ = buffer;
+        buffer_len_ = buffer_len;
+        bits_per_sample_ = bits_per_sample;
+        buffer_pos_ = 0;
     }
-    unsigned int m_bufIndex;  // public access to allow peeking
 
-    void loop()
+    void Loop()
     {
 #if 0
         {
             static uint32_t call_count = 0;
 
             call_count++;
-            if( (call_count%(m_samplingFreqHz)) == 0 )
+            if( (call_count%(samplerate_Hz_)) == 0 )
             {
-                SerialLog::log("DacDS::loop call count: " + String(call_count) );
+                SerialLog::Log("DacDS::loop call count: " + String(call_count) );
             }
         }
 #endif
-        if (m_done)
+        if (done_)
             return;
 
-        int16_t samplePair[2];
-        if( m_bitsPerSample == 16 )
+        int16_t sample_pair[2];
+        if( bits_per_sample_ == 16 )
         {
-            int16_t *pBuf = (int16_t *)m_buffer;
-            samplePair[0] = pBuf[m_bufIndex];
-            samplePair[1] = samplePair[0];
+            int16_t *buf = (int16_t *)buffer_;
+            sample_pair[0] = buf[buffer_pos_];
+            sample_pair[1] = sample_pair[0];
         }
         else
         {
-            assert( m_bitsPerSample == 8 );
-            uint8_t *pBuf = (uint8_t *)m_buffer;
-            samplePair[0] = ((int16_t)pBuf[m_bufIndex] - 128) * 256;
-            samplePair[1] = samplePair[0];
+            assert( bits_per_sample_ == 8 );
+            uint8_t *buf = (uint8_t *)buffer_;
+            sample_pair[0] = ((int16_t)buf[buffer_pos_] - 128) * 256;
+            sample_pair[1] = sample_pair[0];
         }
 
 #if 0
@@ -508,14 +504,14 @@ public:
             static int16_t minVal =  32767;
             static unsigned count = 0;
 
-            if( maxVal < samplePair[0] )
-                maxVal = samplePair[0];
-            if( minVal > samplePair[0] )
-                minVal = samplePair[0];
+            if( maxVal < sample_pair[0] )
+                maxVal = sample_pair[0];
+            if( minVal > sample_pair[0] )
+                minVal = sample_pair[0];
             count++;
             if( count == 44100 )
             {
-                SerialLog::log("DacDS:: min/max Vals: " + String(minVal) + "/" + String(maxVal) );
+                SerialLog::Log("DacDS:: min/max Vals: " + String(minVal) + "/" + String(maxVal) );
                 maxVal = -32768;
                 minVal =  32767;
                 count = 0;
@@ -523,25 +519,25 @@ public:
         }
 #endif
 
-        if( m_I2SOutput )
+        if( i2s_output_ )
         {
             // This call crashes if called from a Ticker fcn.
-            bool ret = m_I2SOutput->ConsumeSample(samplePair);
+            bool ret = i2s_output_->ConsumeSample(sample_pair);
 
             if( ret )
             {
-                m_bufIndex++;
-                if(m_bufIndex >= m_bufLen)
+                buffer_pos_++;
+                if(buffer_pos_ >= buffer_len_)
                 {
-                    if( m_loop )
+                    if( looped_ )
                     {
-                        m_bufIndex = 0;
+                        buffer_pos_ = 0;
                     }
                     else
                     {
-                        m_done = true;
-                        m_I2SOutput->stop();
-                        SerialLog::log("DAC is done");
+                        done_ = true;
+                        i2s_output_->stop();
+                        SerialLog::Log("DAC is done");
                     }
                 }
             }
@@ -553,13 +549,14 @@ private:
 #if 0
     Ticker m_ticker;
 #endif
-    AudioOutputI2SNoDAC *m_I2SOutput;
+    AudioOutputI2SNoDAC *i2s_output_;
 
-    unsigned m_samplingFreqHz;
-    unsigned int m_bitsPerSample;
-    const void *m_buffer;
-    unsigned int m_bufLen;
-    bool m_loop;
-    bool m_done;
+    unsigned samplerate_Hz_;
+    unsigned int bits_per_sample_;
+    const void *buffer_;
+    unsigned int buffer_len_;
+    unsigned int buffer_pos_;  // public access to allow peeking
+    bool looped_;
+    bool done_;
 };
 // vim: sw=4:ts=4

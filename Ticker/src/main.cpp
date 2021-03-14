@@ -66,7 +66,7 @@ void toggle() {
 
 void setup() {
   Serial.begin(115200); // for serial link back to computer
-  SerialLog::log(__FILE__);
+  SerialLog::Log(__FILE__);
 
   pinMode(LED_PIN, OUTPUT);
   toggler.attach(togglePeriod, toggle); // Every 5 seconds, toggles between blinking and non-blinking (during which LED is OFF) 
@@ -102,7 +102,7 @@ public:
         if((m_prevToggle == 0) || (now >= m_prevToggle + m_interval)){
             m_ledState = (m_ledState == LOW) ? HIGH : LOW;
             digitalWrite(m_pin, m_ledState); //
-            SerialLog::log("Toggled LED");
+            SerialLog::Log("Toggled LED");
             m_prevToggle = now;
         }
     }
@@ -113,25 +113,25 @@ private:
     int m_ledState;
 };
 
-LoopTimer loopTimer;
-PolledBlinker heartbeat(LED_BUILTIN, 1500); // BUILTIN_LED also appears on GPIO2
-PolledBlinker extLed(T3, 300);              // Touch3 = GPIO15
+LoopTimer loop_timer;
+PolledBlinker builtin(LED_BUILTIN, 1500);   // BUILTIN_LED also appears on GPIO2
+PolledBlinker external(T3, 300);            // Touch3 = GPIO15
 
 // This runs on powerup
 // - put your setup code here, to run once:
 void setup() {
     Serial.begin(115200); // for serial link back to computer
 
-    SerialLog::log(__FILE__);
+    SerialLog::Log(__FILE__);
 }
 
 // Then this loop runs forever
 // - put your main code here, to run repeatedly:
 void loop() {
-    loopTimer.loop();     // typically 246930 calls/sec
+    loop_timer.Loop();     // typically 246930 calls/sec
 
-    heartbeat.loop();
-    extLed.loop();
+    builtin.Loop();
+    external.Loop();
 }
 
 #endif

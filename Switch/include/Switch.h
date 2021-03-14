@@ -31,83 +31,85 @@ class Switch
 public:
 
     Switch(uint8_t pin)
-    : m_pin(pin)
+    : pin_(pin)
     {
         // TODO: check that pin is valid GPIO
         pinMode(pin, INPUT); // Set specified pin to be an INPUT
     }
 
-    bool isLow()
+    bool IsLow()
     {
-        return (m_state == State_Low) || (m_prevState == State_Low);
+        return (state_ == kLow) || (prev_state_ == kLow);
     }
 
-    bool isHigh()
+    bool IsHigh()
     {
-        return (m_state == State_High) || (m_prevState == State_High);
+        return (state_ == kHigh) || (prev_state_ == kHigh);
     }
 
-    void loop()
+    void Loop()
     {
         // read the state of the switch into a local variable:
-        int reading = digitalRead(m_pin);
+        int reading = digitalRead(pin_);
 
-        switch(m_state)
+        switch(state_)
         {
-            case State_Undefined:
+// TODO: seems I got Rising & Falling reversed, (still works but confusing to read...)
+// XXX
+            case kUndefined:
                 if( reading == HIGH )
                 {
-                    m_state = State_Falling;
+                    state_ = kRising;
                 }
                 else
                 {
                     assert( reading == LOW );
-                    m_state = State_Rising;
+                    state_ = kFalling;
                 }
-                m_prevState = State_Undefined;
-                m_debounceStart = millis();
+                prev_state_ = kUndefined;
+                debounce_start_ = millis();
                 break;
-            case State_Low:
+            case kLow:
                 if( reading == HIGH )
                 {
-                    m_state = State_Falling;
-                    m_debounceStart = millis();
+                    state_ = kRising;
+                    debounce_start_ = millis();
                 }
-                m_prevState = State_Low;
+                prev_state_ = kLow;
                 break;
-            case State_Falling:
+            case kRising:
                 if( reading == LOW )
                 {
-                    m_state = m_prevState;
+                    state_ = prev_state_;
                 }
                 else
                 {
-                    if( millis() > m_debounceStart + debounceDelay)
+                    if( millis() > debounce_start_ + kDebounceDelay )
                     {
-                        m_state = State_High;
-                        SerialLog::log("Transiting to HIGH state");
+                        state_ = kHigh;
+                        SerialLog::Log("Transiting to HIGH state");
                     }
                 }
                 break;
-            case State_High:
+            case kHigh:
                 if( reading == LOW )
                 {
-                    m_state = State_Rising;
-                    m_debounceStart = millis();
+                    state_ = kFalling;
+                    debounce_start_ = millis();
                 }
-                m_prevState = State_High;
+                prev_state_ = kHigh;
                 break;
-            case State_Rising:
+            case kFalling:
                 if( reading == HIGH )
                 {
-                    m_state = m_prevState;
+                    state_ = prev_state_;
                 }
                 else
                 {
-                    if( millis() > m_debounceStart + debounceDelay)
+                    if( millis() > debounce_start_ + kDebounceDelay )
                     {
-                        m_state = State_Low;
-                        SerialLog::log("Transiting to LOW state");
+                        state_ = kLow;
+                        SerialLog::Log("Transiting to LOW state");
                     }
                 }
                 break;
@@ -120,18 +122,18 @@ public:
 private:
     enum State
     {
-        State_Undefined, // Used at startup when switch state is unknown
-        State_Low,
-        State_Falling,
-        State_High,
-        State_Rising,
+        kUndefined, // Used at startup when switch state is unknown
+        kLow,
+        kFalling,
+        kHigh,
+        kRising,
     };
 
-    uint8_t m_pin;
-    State m_state = State_Undefined;
-    State m_prevState = State_Undefined;
-    unsigned long m_debounceStart;
-    static const unsigned long debounceDelay = 50;    // in millis
+    uint8_t pin_;
+    State state_ = kUndefined;
+    State prev_state_ = kUndefined;
+    unsigned long debounce_start_;
+    static const unsigned long kDebounceDelay = 50;    // in millis
 };
 
 // vim: sw=4:ts=4

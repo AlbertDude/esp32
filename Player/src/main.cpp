@@ -15,66 +15,66 @@
 
 //-----------------------------------
 // PCM data files
-uint8_t meepMeepBuf[] = {
+uint8_t buf_meepmeep[] = {
 #include "data/meepmeep.dat"
 };
-uint8_t surelyBuf[] = {
+uint8_t buf_surely[] = {
 #include "data/surely.dat"
 };
-uint8_t surelySeriousBuf[] = {
+uint8_t buf_surelySerious[] = {
 #include "data/surelySerious.dat"
 };
-uint8_t surelyShirleyBuf[] = {
+uint8_t buf_surelyShirley[] = {
 #include "data/surelyShirley.dat"
 };
-uint8_t sorryDaveBuf[] = {
+uint8_t buf_sorryDave[] = {
 #include "data/sorryDave.dat"
 };
-uint8_t pacmanBuf[] = {
+uint8_t buf_pacman[] = {
 #include "data/pacman.dat"
 };
-uint8_t gameOverManBuf[] = {
+uint8_t buf_gameOverMan[] = {
 #include "data/gameOverMan.dat"
 };
 //-----------------------------------
 
-uint8_t *pcmBufs[] =
+uint8_t *pcm_bufs[] =
 {
-    meepMeepBuf,
-    surelyBuf,
-    surelySeriousBuf,
-    surelyShirleyBuf,
-    sorryDaveBuf,
-    pacmanBuf,
-    gameOverManBuf,
+    buf_meepmeep,
+    buf_surely,
+    buf_surelySerious,
+    buf_surelyShirley,
+    buf_sorryDave,
+    buf_pacman,
+    buf_gameOverMan,
 };
 
-unsigned int pcmBufSzs[] =
+unsigned int pcm_buf_szs[] =
 {
-    sizeof(meepMeepBuf),
-    sizeof(surelyBuf),
-    sizeof(surelySeriousBuf),
-    sizeof(surelyShirleyBuf),
-    sizeof(sorryDaveBuf),
-    sizeof(pacmanBuf),
-    sizeof(gameOverManBuf),
+    sizeof(buf_meepmeep),
+    sizeof(buf_surely),
+    sizeof(buf_surelySerious),
+    sizeof(buf_surelyShirley),
+    sizeof(buf_sorryDave),
+    sizeof(buf_pacman),
+    sizeof(buf_gameOverMan),
 };
 
-unsigned int numBufs = sizeof(pcmBufSzs)/sizeof(pcmBufSzs[0]);
+unsigned int kNumBufs = sizeof(pcm_buf_szs)/sizeof(pcm_buf_szs[0]);
 
 // TODO: switched to plain Dac for testing viz
 //DacT dac(DAC1, 8000, false);    // one-shot
 Dac dac(DAC1, 8000, false);    // one-shot
 DacVisualizer viz(&dac);
-Switch buttonSwitch(T0); // Touch0 = GPIO04
-LoopTimer loopTimer;
+Switch button_switch(T0); // Touch0 = GPIO04
+LoopTimer loop_timer;
 
 void setup()
 {
     // This runs on powerup
     // put your setup code here, to run once:
     Serial.begin(115200); // for serial link back to computer
-    SerialLog::log(__FILE__);
+    SerialLog::Log(__FILE__);
     pinMode(LED_BUILTIN, OUTPUT); // LED will follow switch state
 }
 
@@ -82,10 +82,8 @@ void loop()
 {
     // Then this loop runs forever
     // put your main code here, to run repeatedly:
-    loopTimer.loop();     // typically 474986 calls/sec (idling)
+    loop_timer.Loop();     // typically 474986 calls/sec (idling)
                             //          ~340000 calls/sec (cycling thru plays)
-
-    //dac.loop(); // not needed for DacT
 
     // button-handling
     // Assumes: normally-LOW
@@ -93,40 +91,40 @@ void loop()
     {
         enum State
         {
-            State_Low,
-            State_High
+            kLow,
+            kHigh
         };
-        static State state = State_Low;
+        static State state = kLow;
         static int index = -1;  // increment before use so first usage will be 0
 
-        buttonSwitch.loop();
+        button_switch.Loop();
 
         switch(state)
         {
-            case State_Low:
-                if(buttonSwitch.isHigh())
+            case kLow:
+                if(button_switch.IsHigh())
                 {
                     digitalWrite(LED_BUILTIN, HIGH);
-                    state = State_High;
+                    state = kHigh;
                 }
                 break;
-            case State_High:
-                if(buttonSwitch.isLow())
+            case kHigh:
+                if(button_switch.IsLow())
                 {
                     index++;
-                    index = index % numBufs;
-                    dac.setBuffer(pcmBufs[index], pcmBufSzs[index]);
-                    dac.restart();
-                    viz.reset(&dac);
+                    index = index % kNumBufs;
+                    dac.SetBuffer(pcm_bufs[index], pcm_buf_szs[index]);
+                    dac.Restart();
+                    viz.Reset(&dac);
                     digitalWrite(LED_BUILTIN, LOW);
-                    state = State_Low;
+                    state = kLow;
                 }
                 break;
             default:
                 assert(false);  // Bad State
         };
-        dac.loop(); // TODO: exclude for DacT
-        viz.loop();
+        dac.Loop();
+        viz.Loop();
     }
 }
 

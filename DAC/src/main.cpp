@@ -101,36 +101,36 @@ See: https://github.com/earlephilhower/ESP8266Audio/#software-i2s-delta-sigma-da
 // 128	  1610	1645
 // 192	  2370	2400
 // 255    3130	3160
-void dac_ramp()
+void DacRamp()
 {
-    const static uint8_t OUTPUT_MIN = 56;  // corresponds to output voltage ~0.75V
-    static uint8_t outputValue = OUTPUT_MIN;
-    static unsigned long m_prevToggle = 0;
-    static unsigned long m_interval = 20; // increment/decrement interval
-    //static unsigned long m_interval = 7000; // for characterization
-    static bool incrementing = true;
+    const static uint8_t kOutputValueMin = 56;  // corresponds to output voltage ~0.75V
+    static uint8_t output_value = kOutputValueMin;
+    static unsigned long time_prev_toggle = 0;
+    static unsigned long time_interval = 20; // increment/decrement interval
+    //static unsigned long time_interval = 7000; // for characterization
+    static bool is_incrementing = true;
 
-    unsigned long now = millis();
-    if((m_prevToggle == 0) || (now >= m_prevToggle + m_interval))
+    unsigned long time_now = millis();
+    if((time_prev_toggle == 0) || (time_now >= time_prev_toggle + time_interval))
     {
-        dacWrite(DAC1, outputValue);
-        //SerialLog::log("DAC value: " + String(outputValue));
-        if(incrementing)
+        dacWrite(DAC1, output_value);
+        //SerialLog::Log("DAC value: " + String(output_value));
+        if(is_incrementing)
         {
-            outputValue++;
-            if(outputValue==255){
-                incrementing = false;
+            output_value++;
+            if(output_value==255){
+                is_incrementing = false;
             }
         }
         else
         {
-            outputValue--;
-            if(outputValue==OUTPUT_MIN)
+            output_value--;
+            if(output_value==kOutputValueMin)
             {
-                incrementing = true;
+                is_incrementing = true;
             }
         }
-        m_prevToggle = now;
+        time_prev_toggle = time_now;
     }
 }
 
@@ -139,6 +139,8 @@ void dac_ramp()
 // - only define one
 #define TEST_MODE_CYCLE_8B_SAMPRATES
 //#define TEST_MODE_CYCLE_16B_SAMPRATES
+
+// TODO: creae this test mode also
 //#define TEST_MODE_CYCLE_BITDEPTHS
 
 // Pick DAC variant to use
@@ -218,7 +220,7 @@ const uint8_t viola0808Buf[] = {
 };
 
 
-const uint8_t * sampRateBufs08[] = {
+const uint8_t * samplerate_bufs_08[] = {
     viola0808Buf,
     viola1208Buf,
     viola1608Buf,
@@ -228,7 +230,7 @@ const uint8_t * sampRateBufs08[] = {
     viola4408Buf
 };
 
-const int bufLens08[] = {
+const int buf_lens_08[] = {
     sizeof(viola0808Buf)/1,
     sizeof(viola1208Buf)/1,
     sizeof(viola1608Buf)/1,
@@ -238,7 +240,7 @@ const int bufLens08[] = {
     sizeof(viola4408Buf)/1
 };
 
-const uint16_t * sampRateBufs16[] = {
+const uint16_t * samplerate_bufs_16[] = {
     viola0816Buf,
     viola1216Buf,
     viola1616Buf,
@@ -248,7 +250,7 @@ const uint16_t * sampRateBufs16[] = {
     viola4416Buf
 };
 
-const int bufLens16[] = {
+const int buf_lens_16[] = {
     sizeof(viola0816Buf)/2,
     sizeof(viola1216Buf)/2,
     sizeof(viola1616Buf)/2,
@@ -258,7 +260,7 @@ const int bufLens16[] = {
     sizeof(viola4416Buf)/2
 };
 
-const unsigned int sampRates[] = {
+const unsigned int samplerates[] = {
      8000,
     12000,
     16000,
@@ -268,27 +270,27 @@ const unsigned int sampRates[] = {
     44100
 };
 
-#define NUM_SAMPRATES (sizeof(sampRates)/sizeof(sampRates[0])) 
-#define NUM_BUFS08    (sizeof(sampRateBufs08)/sizeof(sampRateBufs08[0]))
-#define NUM_BUFS16    (sizeof(sampRateBufs16)/sizeof(sampRateBufs16[0]))
+#define NUM_SAMPRATES (sizeof(samplerates)/sizeof(samplerates[0])) 
+#define NUM_BUFS08    (sizeof(samplerate_bufs_08)/sizeof(samplerate_bufs_08[0]))
+#define NUM_BUFS16    (sizeof(samplerate_bufs_16)/sizeof(samplerate_bufs_16[0]))
 
 static_assert( NUM_SAMPRATES == NUM_BUFS08, "Number of items should match" );
 static_assert( NUM_SAMPRATES == NUM_BUFS16, "Number of items should match" );
 
 
-LoopTimer loopTimer;
-Switch buttonSwitch(T0); // Touch0 = GPIO04
+LoopTimer loop_timer;
+Switch button_switch(T0); // Touch0 = GPIO04
 
 // This runs on powerup
 // put your setup code here, to run once:
 void setup()
 {
     Serial.begin(115200); // for serial link back to computer
-    SerialLog::log(__FILE__);
+    SerialLog::Log(__FILE__);
 }
 
 #if defined TEST_MODE_CYCLE_8B_SAMPRATES || defined TEST_MODE_CYCLE_16B_SAMPRATES 
-const void * get_buf_params( unsigned int &sampleRate, unsigned int &bitDepth, unsigned int &bufLen )
+const void * GetBufParams( unsigned int &samplerate, unsigned int &bit_depth, unsigned int &buf_len )
 {
     static int index = 9999;    // definitely more than the real number of buffers 
                                 // - so after first increment we'll start at 0
@@ -298,29 +300,29 @@ const void * get_buf_params( unsigned int &sampleRate, unsigned int &bitDepth, u
         index = 0;
 
 #  if defined TEST_MODE_CYCLE_8B_SAMPRATES
-    const void *pBuf = sampRateBufs08[index];
-    sampleRate = sampRates[index];
-    bitDepth = 8;
-    bufLen = bufLens08[index];
+    const void *buf = samplerate_bufs_08[index];
+    samplerate = samplerates[index];
+    bit_depth = 8;
+    buf_len = buf_lens_08[index];
 #  elif defined TEST_MODE_CYCLE_16B_SAMPRATES
-    const void *pBuf = sampRateBufs16[index];
-    sampleRate = sampRates[index];
-    bitDepth = 16;
-    bufLen = bufLens16[index];
+    const void *buf = samplerate_bufs_16[index];
+    samplerate = samplerates[index];
+    bit_depth = 16;
+    buf_len = buf_lens_16[index];
 #  endif
 
-    return pBuf;
+    return buf;
 }
 #endif
 
             
-DAC * get_DAC(unsigned int sampleRate, bool looped, const void * pBuf, unsigned int bufLen, unsigned int bitDepth)
+DAC * GetDac(unsigned int samplerate, bool looped, const void * buf, unsigned int buf_len, unsigned int bit_depth)
 {
 # if defined USE_DACDS
-    return new DAC(sampleRate, looped, pBuf, bufLen, bitDepth);
+    return new DAC(samplerate, looped, buf, buf_len, bit_depth);
 # else
     // either USE_DAC or USE_DACT
-    return new DAC(DAC1, sampleRate, looped, pBuf, bufLen, bitDepth);
+    return new DAC(DAC1, samplerate, looped, buf, buf_len, bit_depth);
 # endif
 }
 
@@ -333,7 +335,7 @@ void loop()
 {
     // TODO: characterize loopTimer counts for various options: Dac, DacT, DacDS
     // - below values are out-of-date
-    loopTimer.loop();   // typically 401400 calls/sec (LOOPED_MODE)
+    loop_timer.Loop();  // typically 401400 calls/sec (LOOPED_MODE)
                         // typically 629300 calls/sec (non-LOOPED_MODE & not playing)
                         // w/ Ticker:
                         // typically 670000 calls/sec (LOOPED_MODE)
@@ -341,14 +343,14 @@ void loop()
                         //  - guessing limited by loopTimer.Update() and the timer is still
                         //  firing
 
-    buttonSwitch.loop();
+    button_switch.Loop();
 
-    static const bool LOOPED = false;
+    static const bool kLooped = false;
 
     static DAC *dac = nullptr;
     static bool was_high = false;
 
-    if(buttonSwitch.isHigh())
+    if(button_switch.IsHigh())
     {
         // kill the previous dac instance
         if( dac )
@@ -364,32 +366,30 @@ void loop()
         if( was_high )
         {
             // get the buffer and its params
-            unsigned int sampleRate;
-            unsigned int bitDepth;
-            unsigned int bufLen;
-            const void *pBuf = get_buf_params( sampleRate, bitDepth, bufLen );  // implementation depends on TEST_MODE_*
-            SerialLog::log( "bufLen: " + String(bufLen) );
-            assert(bufLen > 1000);  // in case the above sizeof isn't doing what I hoped...
+            unsigned int samplerate;
+            unsigned int bit_depth;
+            unsigned int buf_len;
+            const void *buf = GetBufParams( samplerate, bit_depth, buf_len );  // implementation depends on TEST_MODE_*
+            SerialLog::Log( "buf_len: " + String(buf_len) );
+            assert(buf_len > 1000);  // in case the above sizeof isn't doing what I hoped...
 
             // create new dac instance to play the buffer
             assert( dac == nullptr );
-            dac = get_DAC(sampleRate, LOOPED, pBuf, bufLen, bitDepth);  // implementation depends on USE_DAC*
-            viz.reset(dac);
-            SerialLog::log( "Set samplerate/bitDepth: " + String(sampleRate) + "/" + String(bitDepth));
+            dac = GetDac(samplerate, kLooped, buf, buf_len, bit_depth);  // implementation depends on USE_DAC*
+            viz.Reset(dac);
+            SerialLog::Log( "Set samplerate/bit_depth: " + String(samplerate) + "/" + String(bit_depth));
 
             was_high = false;
         }
 
-#     if defined USE_DAC || defined USE_DACDS
-        // non-ticker implementation requires pumping the ::loop() method
         if( dac )
-            dac->loop();
-#     endif
-        if( dac )
-            viz.loop();
+        {
+            dac->Loop();
+            viz.Loop();
+        }
     }
 
-    //dac_ramp();
+    //DacRamp();
 }
 
 // vim: sw=4:ts=4

@@ -30,33 +30,33 @@
 #include "../../LoopTimer/include/LoopTimer.h"
 #include "../../SerialLog/include/SerialLog.h"
 
-LoopTimer loopTimer;
+LoopTimer loop_timer;
 
-#define USE_TICKER (1)
-
-#if USE_TICKER
-BlinkerT heartbeat(LED_BUILTIN, 1500); // BUILTIN_LED also appears on GPIO2
-BlinkerT extLed(T3, 300);              // Touch3 = GPIO15
+#define USE_LOOPED (1)
+#if USE_LOOPED
+#define BLINKER BlinkerL
 #else
-Blinker heartbeat(LED_BUILTIN, 1500); // BUILTIN_LED also appears on GPIO2
-Blinker extLed(T3, 300);              // Touch3 = GPIO15
+#define BLINKER Blinker
 #endif
+
+BLINKER builtin(LED_BUILTIN, 1500);     // BUILTIN_LED also appears on GPIO2
+BLINKER external(T3, 300);              // Touch3 = GPIO15
 
 // This runs on powerup
 // -  put your setup code here, to run once:
 void setup() {
     Serial.begin(115200); // for serial link back to computer
-    SerialLog::log(__FILE__);
+    SerialLog::Log(__FILE__);
 }
 
 // Then this loop runs repeatedly forever
 // - put your main code here, to run repeatedly:
 void loop() {
-    loopTimer.loop();     // typically: 246930 calls/sec or 695400 calls/sec using Ticker
+    loop_timer.Loop();     // typically: 246930 calls/sec or 695400 calls/sec using Ticker
 
-#if !USE_TICKER
-    heartbeat.loop();
-    extLed.loop();
+#if USE_LOOPED
+    builtin.Loop();
+    external.Loop();
 #endif
 }
 

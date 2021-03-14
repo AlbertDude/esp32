@@ -34,7 +34,7 @@
 
 //-----------------------------------------------------------------
 
-Switch buttonSwitch(T0); // Touch0 = GPIO04
+Switch button_switch(T0); // Touch0 = GPIO04
 
 // This runs on powerup
 // - put your setup code here, to run once:
@@ -42,15 +42,15 @@ void setup() {
     Serial.begin(115200); // for serial link back to computer
     pinMode(LED_BUILTIN, OUTPUT); // LED will follow switch state
 
-    SerialLog::log(__FILE__);
+    SerialLog::Log(__FILE__);
 }
 
 // Then this loop runs forever
 // - put your main code here, to run repeatedly:
 void loop() {
-    buttonSwitch.loop();
+    button_switch.Loop();
 
-    if(buttonSwitch.isHigh())
+    if(button_switch.IsHigh())
     {
         digitalWrite(LED_BUILTIN, HIGH);
     }

@@ -16,10 +16,10 @@ DacDS dac(22050, false);    // one-shot
 #else
 DacT dac(DAC1, 22050, false);    // one-shot
 #endif
-LoopTimer loopTimer;
-Switch buttonSwitch(T0); // Touch0 = GPIO04
+LoopTimer loop_timer;
+Switch button_switch(T0); // Touch0 = GPIO04
 
-AudioOutputMonoBuffer *out = NULL;
+AudioOutputMonoBuffer *out = nullptr;
 ESP8266SAM *sam = nullptr;
 
 const ESP8266SAM::SAMVoice voices[] = {
@@ -30,9 +30,9 @@ const ESP8266SAM::SAMVoice voices[] = {
   ESP8266SAM::VOICE_OLDLADY,        // and this one
   ESP8266SAM::VOICE_ET
 };
-const unsigned int numVoices = sizeof(voices)/sizeof(voices[0]);
-int voiceIndex = -1;
-const char* voiceNames[] = {
+const unsigned int kNumVoices = sizeof(voices)/sizeof(voices[0]);
+int voice_index = -1;
+const char* kVoiceNames[] = {
   "SAM", 
   "ELF", 
   "ROBOT", 
@@ -45,8 +45,8 @@ void setup() {
     // This runs on powerup
     // put your setup code here, to run once:
     Serial.begin(115200); // for serial link back to computer
-    SerialLog::log(__FILE__);
-    SerialLog::log("in setup(), Voice Index: " + String(voiceIndex));
+    SerialLog::Log(__FILE__);
+    SerialLog::Log("in setup(), Voice Index: " + String(voice_index));
 
     pinMode(LED_BUILTIN, OUTPUT); // LED will follow switch state
 
@@ -60,7 +60,7 @@ void loop() {
     // Then this loop runs forever
     // put your main code here, to run repeatedly:
 
-    loopTimer.loop();     // typically 695482 calls/sec
+    loop_timer.Loop();     // typically 695482 calls/sec
 
     // for these phrases, uses up to ~46000 samples (for standard voice)
     // - buffer size is voice-dependent
@@ -76,7 +76,7 @@ void loop() {
         // - suspect it's in the I2SNoDac implementation as it sounds like a partial buffer gets
         // looped indefinitely
     };
-    const unsigned int numPhrases = sizeof(phrases)/sizeof(phrases[0]);
+    const unsigned int kNumPhrases = sizeof(phrases)/sizeof(phrases[0]);
 
     // button-handling
     // Assumes: normally-LOW
@@ -84,65 +84,62 @@ void loop() {
     {
         enum State
         {
-            State_Low,
-            State_High
+            kLow,
+            kHigh
         };
-        static State state = State_Low;
-        static int index = -1;  // increment before use so first usage will be 0
+        static State state = kLow;
+        static int phrase_index = -1;  // increment before use so first usage will be 0
 
-        buttonSwitch.loop();
+        button_switch.Loop();
 
         switch(state)
         {
-            case State_Low:
-                if(buttonSwitch.isHigh())
+            case kLow:
+                if(button_switch.IsHigh())
                 {
                     digitalWrite(LED_BUILTIN, HIGH);
-                    state = State_High;
+                    state = kHigh;
                 }
                 break;
-            case State_High:
-                if(buttonSwitch.isLow())
+            case kHigh:
+                if(button_switch.IsLow())
                 {
                     digitalWrite(LED_BUILTIN, LOW);
-                    index++;
+                    phrase_index++;
 
-                    out->reset();
-                    index = index % numPhrases;
+                    out->Reset();
+                    phrase_index = phrase_index % kNumPhrases;
 
-                    if(index == 0)
+                    if(phrase_index == 0)
                     {
-                        voiceIndex++;
-                        voiceIndex = voiceIndex % numVoices;
-                        sam->SetVoice(voices[voiceIndex]);
-                        SerialLog::log("====================");
-                        SerialLog::log("Setting Voice: " + String(voiceNames[voiceIndex]));
+                        voice_index++;
+                        voice_index = voice_index % kNumVoices;
+                        sam->SetVoice(voices[voice_index]);
+                        SerialLog::Log("====================");
+                        SerialLog::Log("Setting Voice: " + String(kVoiceNames[voice_index]));
                     }
 
-                    SerialLog::log("--------------------");
-                    SerialLog::log("Phrase: " + String(phrases[index]));
+                    SerialLog::Log("--------------------");
+                    SerialLog::Log("Phrase: " + String(phrases[phrase_index]));
 
                     // This seems to be a blocking call
                     // i.e. buffer is complete upon return
-                    sam->Say(out, phrases[index]);
-                    SerialLog::log("buf Hz, bsp, #ch: " + String(out->hertz) + ", " + String(out->bps) + ", " + String(out->channels));
-                    SerialLog::log("buf used: " + String(out->GetBufUsed()));
-                    SerialLog::log("buf ovrflw: " + String(out->GetNumBufOverflows()));
-                    SerialLog::log("sample range: " + String(out->minVal) + " -> " + String(out->maxVal));
+                    sam->Say(out, phrases[phrase_index]);
+                    SerialLog::Log("buf Hz, bsp, #ch: " + String(out->hertz) + ", " + String(out->bps) + ", " + String(out->channels));
+                    SerialLog::Log("buf used: " + String(out->GetBufUsed()));
+                    SerialLog::Log("buf ovrflw: " + String(out->GetNumBufOverflows()));
+                    SerialLog::Log("sample range: " + String(out->min_val_) + " -> " + String(out->max_val_));
 
-                    dac.setBuffer(out->GetBuf(), out->GetBufUsed(), out->bps);
-                    dac.restart();
-                    state = State_Low;
+                    dac.SetBuffer(out->GetBuf(), out->GetBufUsed(), out->bps);
+                    dac.Restart();
+                    state = kLow;
                 }
                 break;
             default:
                 assert(false);  // Bad State
         };
     }
-#   if defined USE_DACDS
-    // non-ticker implementation requires pumping the ::loop() method
-    dac.loop();
-#   endif
+    dac.Loop();
 }
 
 // vim: sw=4:ts=4

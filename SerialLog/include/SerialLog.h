@@ -13,9 +13,9 @@
 class SerialLog
 {
 public:
-    static void log(String msg)
+    static void Log(String msg)
     {
-        SerialLog::getInstance().doLog(msg);
+        SerialLog::GetInstance().DoLog(msg);
     }
 
 public:
@@ -25,25 +25,25 @@ public:
     void operator=(SerialLog const&)  = delete;
 
 private:
-    unsigned long m_startMs;
+    unsigned long start_millis_;
     SerialLog()
     {
-        m_startMs = millis();
+        start_millis_ = millis();
     }
 
-    static SerialLog& getInstance()
+    static SerialLog& GetInstance()
     {
         static SerialLog    instance;   // Guaranteed to be destroyed.
                                         // Instantiated on first use.
         return instance;
     }
 
-    void doLog(String msg)
+    void DoLog(String msg)
     {
         // TODO: do wraparound check, though that takes ~ 50 days to happen
         // - uint32_t => 49.7 days
         // https://www.arduino.cc/reference/en/language/functions/time/millis/
-        unsigned long elapsed = millis() - m_startMs;
+        unsigned long elapsed = millis() - start_millis_;
         float elapsed_secs = (float)(elapsed)/1000.f;
         Serial.println( String(elapsed_secs, 3) + ": " + msg );
     }

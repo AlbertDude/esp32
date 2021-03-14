@@ -41,6 +41,8 @@
 # On deck:
 #   web server? - web i/f to enter speech phrases
 #   terminal/ssh server? - basically way to get remote keyboard input
+#   MQTT? - basically way to get remote keyboard input
+
 #   myTTS
 #       - hoping provides better sound quality than SAM
 #   TTS
