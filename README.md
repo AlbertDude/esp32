@@ -38,6 +38,21 @@
 #       - quality not great but GEFN (Good Enough For Now)
 #           - SQ does have some variance among the voices
 ### 
+# NEW:
+#   PubSubTest
+#       - usage of PubSubClient library
+#       - subscribes to Topic: "esp32/test"
+#           - recognizes "on"/"off" messages
+#       - pretty much just worked (wifi wouldn't connect on first run after flashing -- just needed to hit reset button)
+### 
+# TODO:
+#   SammySays
+#       - combination of mySAM & PubSubTest
+#       - subscribes to Topic: "SammySays/say"
+#       - subscribes to Topic: "SammySays/control"
+#           - set voice
+#           - anything else?
+### 
 # On deck:
 #   web server? - web i/f to enter speech phrases
 #   terminal/ssh server? - basically way to get remote keyboard input

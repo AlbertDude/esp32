@@ -1,8 +1,7 @@
 #include <Arduino.h>
 #include <ESP8266SAM.h>
 
-#include <AudioOutputMonoBuffer.h>
-
+#include "AudioOutputMonoBuffer.h"
 #include "../../SerialLog/include/SerialLog.h"
 #include "../../LoopTimer/include/LoopTimer.h"
 #include "../../Switch/include/Switch.h"
@@ -77,9 +76,6 @@ void loop() {
         "hello emerson",
         "how old are you",
         "don't call me, i'll call you",
-        // TODO: there's a bug in the libs that causes this to repeat at the end...
-        // - suspect it's in the I2SNoDac implementation as it sounds like a partial buffer gets
-        // looped indefinitely
     };
     const unsigned int kNumPhrases = sizeof(phrases)/sizeof(phrases[0]);
 
