@@ -11,12 +11,15 @@
 
 //-----------------------------------------------------------------
 
-//#define USE_DACDS
-#ifdef USE_DACDS
-DacDS dac(22050, false /* looped */);
-#else
-Dac dac(DAC1, 22050, false /* looped */);
-#endif
+// Pick DAC variant to use
+// - only define one
+// - use of Dac or DacT will default to DAC1 pin output
+
+//#define DAC DacDS
+//#define DAC DacT
+#define DAC Dac
+
+DAC dac(22050, false /* looped */);
 DacVisualizer viz;
 LoopTimer loop_timer;
 Switch button_switch(T0); // Touch0 = GPIO04

@@ -43,7 +43,7 @@ SPKR   ▽     │      ┌───║BYPASS        IN-║
     DacT - timer-based driver
         - good up to about 16 kHz (w/ either 8/16 bit data buffer)
             - beyond that, playback seems slowed down, guessing it's a limitation of the timer rate
-    Dac  - polling-based driver (need to regularly call ::loop())
+    Dac  - polling-based driver (need to regularly call ::Loop())
         - good up to about 22 kHz (w/ 8 bit data buffer) before hear slow down
             - hear pops at all rates though -- seems to be caused by serial prints
             - realistically, this would make this implementation not-usable in any real apps
@@ -71,7 +71,7 @@ See: https://github.com/earlephilhower/ESP8266Audio/#software-i2s-delta-sigma-da
   (from ESP DevKit)    1k            5V,VIN            
 
 - One option:
-    DacDS  - polling-based driver (need to regularly call ::loop())
+    DacDS  - polling-based driver (need to regularly call ::Loop())
         - good all the way up to 44.1 kHz (w/ 8 bit data buffer)
         - good all the way up to 44.1 kHz (w/ 16 bit data buffer)
             - lower samplerates sound both noisy and distorted in the high freqs
@@ -105,17 +105,61 @@ uint8_t ConvertSampleTo8Bit(int16_t i16_val)
 // - initial use-case is for DacVisualizer
 class IDac
 {
-    public:
-        virtual bool IsPlaying() = 0;
-        virtual unsigned int GetCurrentPos() = 0;
-        virtual const void * GetDataBuffer() = 0;
-        virtual unsigned int GetDataBufferLen() = 0;
-        virtual unsigned int GetBitsPerSample() = 0;
-        virtual unsigned int GetSamplerate() = 0;
+public:
+    virtual bool IsPlaying()
+    {
+        return (done_ == false);
+    }
+
+    virtual unsigned int GetCurrentPos()
+    {
+        return buffer_pos_;
+    }
+
+    virtual const void * GetDataBuffer()
+    {
+        return buffer_;
+    }
+
+    virtual unsigned int GetDataBufferLen()
+    {
+        return buffer_len_;
+    }
+
+    virtual unsigned int GetBitsPerSample()
+    {
+        return bits_per_sample_;
+    }
+
+    virtual unsigned int GetSamplerate()
+    {
+        return samplerate_;
+    }
+
+    virtual void SetBuffer(const void *buffer, unsigned int buffer_len, unsigned int bits_per_sample)
+    {
+        assert(buffer);
+        buffer_ = buffer;
+        buffer_len_ = buffer_len;
+        bits_per_sample_ = bits_per_sample;
+        buffer_pos_ = 0;
+    }
+
+    virtual void Restart() = 0;
+    virtual void Loop() = 0;
+
+protected:
+    bool looped_;
+    const void *buffer_;
+    unsigned int buffer_len_;
+    unsigned int buffer_pos_;  // public access to allow peeking
+    unsigned int bits_per_sample_;
+    unsigned int samplerate_;
+    bool done_;
 };
 
 // Polled 8-bit DAC implementation
-// - user needs to call ::loop() periodically at a rate faster than the output sampling rate.
+// - user needs to call ::Loop() periodically at a rate faster than the output sampling rate.
 // - mainly for illustrative purposes, should use DacT for Timer-driven implementation which is:
 //  - lighter on CPU load
 // - ALSO NOTE:
@@ -124,21 +168,18 @@ class IDac
 class Dac : public IDac
 {
 public:
-    Dac(uint8_t dac_pin, unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=8)
-        : looped_(looped)
-        , bits_per_sample_(bits_per_sample)
-        , done_(true)
+    Dac(unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=8, uint8_t dac_pin=DAC1)
     {
+        samplerate_ = samplerate_Hz;
+        looped_ = looped;
+        bits_per_sample_ = bits_per_sample;
+        done_ = true;
+
         // Verify DAC pin was specified
         assert( (dac_pin == DAC1) || (dac_pin == DAC2) );
         dac_pin_ = dac_pin;
 
-        // best to pick outputFreq that divides into 1000 sans remainder
-        // e.g. 10 kHz => 100 us output interval
-        // e.g. 20 kHz => 50 us output interval
-        // e.g. 25 kHz => 40 us output interval
         time_interval_ = 1000000 / samplerate_Hz;
-        samplerate_ = samplerate_Hz;
 
         if( buffer != nullptr )
         {
@@ -151,54 +192,17 @@ public:
 
     virtual ~Dac() {}
 
-    // IDac Interface begin
-    virtual bool IsPlaying() override
-    {
-        return (done_ == false);
-    }
-    virtual unsigned int GetCurrentPos() override
-    {
-        return buffer_pos_;
-    }
-    virtual const void * GetDataBuffer() override
-    {
-        return buffer_;
-    }
-    virtual unsigned int GetDataBufferLen() override
-    {
-        return buffer_len_;
-    }
-    virtual unsigned int GetBitsPerSample() override
-    {
-        return bits_per_sample_;
-    }
-    virtual unsigned int GetSamplerate() override
-    {
-        return samplerate_;
-    }
-    // IDac Interface end
+    // IDac Interface overrides begin {
 
     // Intended to restart one-shot (ie. non-looped) mode
-    void Restart()
+    void Restart() override
     {
         done_ = false;
         buffer_pos_ = 0;
         time_prev_toggle_ = 0;
     }
 
-    // Intended to change content for one-shot (ie. non-looped) mode
-    void SetBuffer(const void *buffer, unsigned int buffer_len, unsigned int bits_per_sample=8)
-    {
-        assert(buffer);
-        buffer_ = buffer;
-        buffer_len_ = buffer_len;
-        bits_per_sample_ = bits_per_sample;
-        if( bits_per_sample != 8 )
-            SerialLog::Log( "Using 8-bit DAC to output data with bitdepth: " + String(bits_per_sample) );
-        buffer_pos_ = 0;
-    }
-
-    void Loop()
+    void Loop() override
     {
         if (done_)
             return;
@@ -254,30 +258,27 @@ public:
         }
     }
 
+    // IDac Interface overrides end }
+
 private:
     uint8_t dac_pin_;
     unsigned time_interval_;  // interval in micro secs
     unsigned long time_prev_toggle_;
-    const void *buffer_;
-    unsigned int buffer_len_;
-    unsigned int buffer_pos_;  // public access to allow peeking
-    bool looped_;
-    unsigned int bits_per_sample_;
-    unsigned int samplerate_;
-    bool done_;
 };
 
 // Timer/Ticker-based 8-bit DAC implementation
 // - ::_Loop() is periodically called automatically via the Ticker/Timer mechanism
-// - ::loop() is provided as a dummy fcn for IDac API requirements but user doesn't need to call it
-class DacT
+// - ::Loop() is provided as a dummy fcn for IDac API requirements but user doesn't need to call it
+class DacT : public IDac
 {
 public:
-    DacT(uint8_t dac_pin, unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=8)
-    : looped_(looped)
-    , bits_per_sample_(bits_per_sample)
-    , done_(true)
+    DacT(unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=8, uint8_t dac_pin=DAC1)
     {
+        samplerate_ = samplerate_Hz;
+        looped_ = looped;
+        bits_per_sample_ = bits_per_sample;
+        done_ = true;
+
         // Verify DAC pin was specified
         assert( (dac_pin == DAC1) || (dac_pin == DAC2) );
         dac_pin_ = dac_pin;
@@ -290,37 +291,22 @@ public:
             Restart();
         }
 
-        // best to pick outputFreq that divides into 1000 sans remainder
-        // e.g.  8 kHz => 125 us output interval
-        // e.g. 10 kHz => 100 us output interval
-        // e.g. 20 kHz => 50 us output interval
-        // e.g. 25 kHz => 40 us output interval
         uint32_t interval_us = 1000000 / samplerate_Hz;
 
         m_ticker.attach_us<DacT *>(interval_us, DacT::_Loop, this);
     }
 
-    ~DacT()
+    virtual ~DacT()
     {
         m_ticker.detach();
     }
 
+    // IDac Interface overrides begin {
+
     // Intended to restart one-shot (ie. non-looped) mode
-    void Restart()
+    void Restart() override
     {
         done_ = false;
-        buffer_pos_ = 0;
-    }
-
-    // Intended to change content for one-shot (ie. non-looped) mode
-    void SetBuffer(const void *buffer, unsigned int buffer_len, unsigned int bits_per_sample=8)
-    {
-        assert(buffer);
-        buffer_ = buffer;
-        buffer_len_ = buffer_len;
-        bits_per_sample_ = bits_per_sample;
-        if( bits_per_sample != 8 )
-            SerialLog::Log( "Using 8-bit DAC to output data with bitdepth: " + String(bits_per_sample) );
         buffer_pos_ = 0;
     }
 
@@ -329,6 +315,8 @@ public:
     {
         return;
     }
+
+    // IDac Interface overrides end }
 
 private:
     static void _Loop(DacT *instance)
@@ -366,23 +354,15 @@ private:
         }
     }
 
-
 private:
     Ticker m_ticker;
-
     uint8_t dac_pin_;
-    const void *buffer_;
-    unsigned int buffer_len_;
-    unsigned int buffer_pos_;  // public access to allow peeking
-    bool looped_;
-    unsigned int bits_per_sample_;
-    bool done_;
 };
 
 // Polled Delta-Sigma DAC implementation
 // Based on AudioOutputI2SNoDAC from: https://github.com/earlephilhower/ESP8266Audio
 // TODO:
-// - think can do a Ticker based implementation via additional ::loop() task that blocks on
+// - think can do a Ticker based implementation via additional ::Loop() task that blocks on
 // semaphore that is signaled by Ticker fcn.
 // - this complication needed since the i2s_write() call crashes if called from the Ticker fcn
 // (hence the need to run this polled)
@@ -391,15 +371,16 @@ private:
 // - seems that VSCode or platform.io or Arduino does a limited scan to determine what libs it
 // thinks it needs to incorporate...
 #include <AudioOutputI2SNoDAC.h>
-class DacDS
+class DacDS : public IDac
 {
 public:
-    DacDS(unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=16)
-    : samplerate_Hz_(samplerate_Hz)
-    , bits_per_sample_(bits_per_sample)
-    , looped_(looped)
-    , done_(true)
+    DacDS(unsigned int samplerate_Hz, bool looped=true, const void *buffer=nullptr, unsigned int buffer_len=0, unsigned int bits_per_sample=8)
     {
+        samplerate_ = samplerate_Hz;
+        looped_ = looped;
+        bits_per_sample_ = bits_per_sample;
+        done_ = true;
+
         i2s_output_ = new AudioOutputI2SNoDAC();    // TODO: see if compiler supports shared_ptr, I think it does...
         assert(i2s_output_);
 
@@ -435,6 +416,8 @@ public:
         }
     }
 
+    // IDac Interface overrides begin {
+
     // Intended to restart one-shot (ie. non-looped) mode
     void Restart()
     {
@@ -444,7 +427,7 @@ public:
         if( i2s_output_ )
         {
             bool ret;
-            ret = i2s_output_->SetRate( samplerate_Hz_ );
+            ret = i2s_output_->SetRate( samplerate_ );
             assert( ret );
             // 8->16 bit conversion handled in this class, so underlying AudioOutputI2SNoDAC always @ 16 bits
             ret = i2s_output_->SetBitsPerSample( 16 );
@@ -456,16 +439,6 @@ public:
         }
     }
 
-    // Intended to change content for one-shot (ie. non-looped) mode
-    void SetBuffer(const void *buffer, unsigned int buffer_len, unsigned int bits_per_sample=16)
-    {
-        assert(buffer);
-        buffer_ = buffer;
-        buffer_len_ = buffer_len;
-        bits_per_sample_ = bits_per_sample;
-        buffer_pos_ = 0;
-    }
-
     void Loop()
     {
 #if 0
@@ -473,9 +446,9 @@ public:
             static uint32_t call_count = 0;
 
             call_count++;
-            if( (call_count%(samplerate_Hz_)) == 0 )
+            if( (call_count%(samplerate_)) == 0 )
             {
-                SerialLog::Log("DacDS::loop call count: " + String(call_count) );
+                SerialLog::Log("DacDS::Loop call count: " + String(call_count) );
             }
         }
 #endif
@@ -544,19 +517,12 @@ public:
         }
     }
 
+    // IDac Interface overrides end }
 
 private:
 #if 0
     Ticker m_ticker;
 #endif
     AudioOutputI2SNoDAC *i2s_output_;
-
-    unsigned samplerate_Hz_;
-    unsigned int bits_per_sample_;
-    const void *buffer_;
-    unsigned int buffer_len_;
-    unsigned int buffer_pos_;  // public access to allow peeking
-    bool looped_;
-    bool done_;
 };
 // vim: sw=4:ts=4

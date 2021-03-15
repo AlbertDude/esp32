@@ -140,25 +140,17 @@ void DacRamp()
 #define TEST_MODE_CYCLE_8B_SAMPRATES
 //#define TEST_MODE_CYCLE_16B_SAMPRATES
 
-// TODO: creae this test mode also
+// TODO: create this test mode also
 //#define TEST_MODE_CYCLE_BITDEPTHS
+
 
 // Pick DAC variant to use
 // - only define one
-// - each can be set independently (4 combos)
-//#define USE_DACDS
-//#define USE_DACT
-#define USE_DAC
+// - use of Dac or DacT will default to DAC1 pin output
 
-#if defined USE_DACDS
-#  define DAC DacDS
-#elif defined USE_DACT
-#  define DAC DacT
-#elif defined USE_DAC
-#  define DAC Dac
-#else
-#  error "Must define one of USE_DAC*"
-#endif
+//#define DAC DacDS
+//#define DAC DacT
+#define DAC Dac
 
 
 //-----------------------------------------------------------------
@@ -318,12 +310,7 @@ const void * GetBufParams( unsigned int &samplerate, unsigned int &bit_depth, un
             
 DAC * GetDac(unsigned int samplerate, bool looped, const void * buf, unsigned int buf_len, unsigned int bit_depth)
 {
-# if defined USE_DACDS
     return new DAC(samplerate, looped, buf, buf_len, bit_depth);
-# else
-    // either USE_DAC or USE_DACT
-    return new DAC(DAC1, samplerate, looped, buf, buf_len, bit_depth);
-# endif
 }
 
 DacVisualizer viz;

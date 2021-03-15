@@ -36,6 +36,7 @@ uint8_t buf_pacman[] = {
 uint8_t buf_gameOverMan[] = {
 #include "data/gameOverMan.dat"
 };
+const unsigned int kBitDepth = 8;
 //-----------------------------------
 
 uint8_t *pcm_bufs[] =
@@ -60,11 +61,21 @@ unsigned int pcm_buf_szs[] =
     sizeof(buf_gameOverMan),
 };
 
-unsigned int kNumBufs = sizeof(pcm_buf_szs)/sizeof(pcm_buf_szs[0]);
+const unsigned int kNumBufs = sizeof(pcm_buf_szs)/sizeof(pcm_buf_szs[0]);
 
-// TODO: switched to plain Dac for testing viz
-//DacT dac(DAC1, 8000, false);    // one-shot
-Dac dac(DAC1, 8000, false);    // one-shot
+//-----------------------------------
+
+// Pick DAC variant to use
+// - only define one
+// - use of Dac or DacT will default to DAC1 pin output
+
+//#define DAC DacDS
+//#define DAC DacT
+#define DAC Dac
+
+//-----------------------------------
+
+DAC dac(8000, false /* looped */);
 DacVisualizer viz(&dac);
 Switch button_switch(T0); // Touch0 = GPIO04
 LoopTimer loop_timer;
@@ -113,7 +124,7 @@ void loop()
                 {
                     index++;
                     index = index % kNumBufs;
-                    dac.SetBuffer(pcm_bufs[index], pcm_buf_szs[index]);
+                    dac.SetBuffer(pcm_bufs[index], pcm_buf_szs[index], kBitDepth);
                     dac.Restart();
                     viz.Reset(&dac);
                     digitalWrite(LED_BUILTIN, LOW);
