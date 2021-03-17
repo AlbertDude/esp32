@@ -39,7 +39,7 @@ LoopTimer loop_timer;
 // Bring in WIFI SSID/Password combination, e.g.:
 //const char* ssid = "REPLACE_WITH_YOUR_SSID";
 //const char* password = "REPLACE_WITH_YOUR_PASSWORD";
-#include "wifi_credentials.inc"
+#include "../../wifi_credentials.inc"
 
 // Add your MQTT Broker IP address, example:
 const char* mqtt_server = "192.168.0.44";
@@ -62,7 +62,7 @@ void SetupWifi()
         delay(500);
         Serial.print(".");
     }
-    SerialLog::Log("WiFi connected to IP Address: " + String(WiFi.localIP()));
+    SerialLog::Log("WiFi connected to IP Address: " + WiFi.localIP().toString());
 }
 
 void Callback(char* topic, byte* message, unsigned int length) 

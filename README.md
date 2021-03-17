@@ -37,21 +37,28 @@
 #       - generate PCM to memory and then plays memory out to DAC
 #       - quality not great but GEFN (Good Enough For Now)
 #           - SQ does have some variance among the voices
-### 
-# NEW:
 #   PubSubTest
 #       - usage of PubSubClient library
 #       - subscribes to Topic: "esp32/test"
 #           - recognizes "on"/"off" messages
 #       - pretty much just worked (wifi wouldn't connect on first run after flashing -- just needed to hit reset button)
-### 
-# TODO:
 #   SammySays
 #       - combination of mySAM & PubSubTest
 #       - subscribes to Topic: "SammySays/say"
 #       - subscribes to Topic: "SammySays/control"
-#           - set voice
+#           - "voice N", "voice ?"
 #           - anything else?
+#       - CPU load was an issue
+#           - address by throttling the calls to the MQTT loop code
+#           - SAM playback is noticeably slowed down otherwise
+#           - with throttling, idles at 334,000, dropping to about 215,000 when SAM active
+#           - LoopTimer indicates loop rate of only 21,500 with mqtt_client loop() code unthrottled
+#               - cf. 260,000 for mySAM with button-switch spammed
+### 
+# NEW:
+### 
+# TODO:
+#   try other MQTT lib and evaluate performance
 ### 
 # On deck:
 #   web server? - web i/f to enter speech phrases

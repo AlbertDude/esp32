@@ -45,9 +45,9 @@ const char* kVoiceNames[] = {
   "ET"
 };
 
+// This runs on powerup
+// -  put your setup code here, to run once:
 void setup() {
-    // This runs on powerup
-    // put your setup code here, to run once:
     Serial.begin(115200); // for serial link back to computer
     SerialLog::Log(__FILE__);
     SerialLog::Log("in setup(), Voice Index: " + String(voice_index));
@@ -60,11 +60,13 @@ void setup() {
     sam = new ESP8266SAM;
 }
 
+// Then this loop runs repeatedly forever
+// - put your main code here, to run repeatedly:
 void loop() {
-    // Then this loop runs forever
-    // put your main code here, to run repeatedly:
 
-    loop_timer.Loop();     // typically 695482 calls/sec
+    loop_timer.Loop();      // base-rate: 695,482 calls/sec
+                            // - drops to around 260,000 when hammering the switch to get SAM
+                            // running
 
     // for these phrases, uses up to ~46000 samples (for standard voice)
     // - buffer size is voice-dependent
