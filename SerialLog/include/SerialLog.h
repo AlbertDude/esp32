@@ -1,6 +1,29 @@
 #pragma once
 
 #include <Arduino.h>
+#include <time.h>
+#include <sys/time.h>
+
+// Modified from getLocalTime() in esp32-hal-time.c
+bool GetLocalTimeWithMs(struct tm * info, int &ms, uint32_t timeout_ms=5000);
+bool GetLocalTimeWithMs(struct tm * info, int &ms, uint32_t timeout_ms)
+{
+    uint32_t start = millis();
+    time_t now;
+    timeval tval;
+    while((millis()-start) <= timeout_ms) {
+        gettimeofday(&tval, NULL);
+        now = tval.tv_sec;
+        localtime_r(&now, info);
+        if(info->tm_year > (2016 - 1900)){
+            ms = tval.tv_usec / 1000;
+            return true;
+        }
+        delay(10);
+    }
+    return false;
+}
+
 
 // Logging helper
 // - wrapper around Serial.prints with timestamps
@@ -18,6 +41,16 @@ public:
         SerialLog::GetInstance().DoLog(msg);
     }
 
+    static void Log(tm & timeinfo, const char * format)
+    {
+        SerialLog::GetInstance().DoLog(timeinfo, format);
+    }
+
+    static void UseLocalTime()
+    {
+        SerialLog::GetInstance().use_local_time_ = true;
+    }
+
 public:
     // Prevent copies of the singleton by preventing use of copy constructor and assignment operator
     // - public access for supposedly better error messaging
@@ -26,6 +59,7 @@ public:
 
 private:
     unsigned long start_millis_;
+    bool use_local_time_ = false;
     SerialLog()
     {
         start_millis_ = millis();
@@ -38,15 +72,50 @@ private:
         return instance;
     }
 
-    void DoLog(String msg)
+    String GetElapsedTime()
     {
         // TODO: do wraparound check, though that takes ~ 50 days to happen
         // - uint32_t => 49.7 days
         // https://www.arduino.cc/reference/en/language/functions/time/millis/
         unsigned long elapsed = millis() - start_millis_;
         float elapsed_secs = (float)(elapsed)/1000.f;
-        Serial.println( String(elapsed_secs, 3) + ": " + msg );
+        String timestamp = String(elapsed_secs, 3) + "> ";
+        String pad_str = "";
+        const char *pads[] = {"", "0", "00", "000"};
+        int pad_len = 10 - timestamp.length();
+        assert (pad_len < (sizeof(pads)/sizeof(pads[0])));
+        return pads[pad_len] + timestamp;
     }
 
+    String GetLogTime()
+    {
+        if (use_local_time_)
+        {
+            // Some hoops to go thru to display localtime with ms...
+            tm timeinfo;
+            int ms;
+            if (GetLocalTimeWithMs(&timeinfo, ms))
+            {
+                char time_str[30];
+                strftime(time_str, 30, "%y-%m-%d %H:%M:%S.abc", &timeinfo);
+                // Oh, the horror! -- of the next 2 lines of code
+                const int index = 17;
+                snprintf(time_str+index, sizeof(time_str)-index-1, ".%03d> ", ms);
+                return String(time_str);
+            }
+        }
+        return GetElapsedTime();
+    }
+
+    void DoLog(String msg)
+    {
+        Serial.println( GetLogTime() + msg );
+    }
+
+    void DoLog(tm & timeinfo, const char * format)
+    {
+        Serial.print( GetLogTime() );
+        Serial.println( &timeinfo, format );
+    }
 };
 
