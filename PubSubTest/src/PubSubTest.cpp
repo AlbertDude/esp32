@@ -1,4 +1,5 @@
 // TODO:
+// - create MqttHelper.h
 // - publish log to mqtt topic: PubSubTest/log
 
 /* PubSubTest
@@ -11,7 +12,7 @@
  * - syncs device local time with NTP server
  * WifiHelper
  * - helper to setup Wifi
-// - note if wifi not connecting, try pressing 'Reset' button
+ * - note if wifi not connecting, try pressing 'Reset' button
  *
  * No specific H/W setup needed
  *
@@ -26,114 +27,23 @@
 #include "../../SerialLog/include/SerialLog.h"
 #include "../../PubSubTest/include/WifiHelper.h"
 #include "../../PubSubTest/include/NtpTime.h"
+#include "../../PubSubTest/include/MqttHelper.h"
 
 
 #define APP_NAME "PubSubTest"
 
 //-----------------------------------------------------------------
-// MQTT stuff
-
-// MQTT Broker IP address
-const char* mqtt_server = "192.168.0.44";
-
-WiFiClient wifi_client;
-PubSubClient mqtt_client(wifi_client);
-const long kReconnectAttemptInterval = 5000; // Try reconnections every 5 s
-
-#define TOPIC_SUB_TEST APP_NAME"/test"
-
-void Callback(char* topic, byte* message_bytes, unsigned int length) 
-{
-    SerialLog::Log("Message arrived on topic: " + String(topic));
-
-    String message;
-
-    for (int i = 0; i < length; i++) 
-    {
-        message += (char)message_bytes[i];
-    }
-    SerialLog::Log("Message: " + message);
-
-    if (String(topic) == TOPIC_SUB_TEST) 
-    {
-        if(message == "on")
-        {
-            SerialLog::Log("<ON>");
-        }
-        else if(message == "off")
-        {
-            SerialLog::Log("<OFF>");
-        }
-    }
-}
-
-boolean ReconnectNonBlocking() 
-{
-    bool connected = mqtt_client.connect(APP_NAME);
-    if (connected)
-    {
-        SerialLog::Log("MQTT connected");
-        // subscriptions
-        SerialLog::Log("MQTT subscribed topics: " + String(TOPIC_SUB_TEST));
-        mqtt_client.subscribe(TOPIC_SUB_TEST);
-    }
-    return connected;
-}
-
-void ReconnectBlocking() 
-{
-    // Loop until we're reconnected
-    while (!mqtt_client.connected()) 
-    {
-        SerialLog::Log("Attempting MQTT connection...");
-        // Attempt to connect
-        if (!ReconnectNonBlocking())
-        {
-            SerialLog::Log("Failed, rc=" + String(mqtt_client.state()));
-            SerialLog::Log("Retry in 5 seconds");
-            delay(kReconnectAttemptInterval); // Wait before retrying
-        }
-    }
-}
-
-// call from setup()
-void MqttSetup()
-{
-    mqtt_client.setServer(mqtt_server, 1883);
-    mqtt_client.setCallback(Callback);
-
-    // Initial mqtt connection
-    ReconnectBlocking();
-}
-
-// call from loop()
-void MqttLoop()
-{
-    if (!mqtt_client.connected()) 
-    {
-        static long prev_attempt = 0;
-        long now = millis();
-        if (now - prev_attempt > kReconnectAttemptInterval) 
-        {
-            // Attempt to reconnect
-            ReconnectNonBlocking();
-            prev_attempt = now;
-        }
-    } 
-    else 
-    {
-        mqtt_client.loop();
-    }
-}
-
-//-----------------------------------------------------------------
 
 LoopTimer loop_timer;
 
-// Bring in WIFI SSID/Password combination, e.g.:
-//const char* ssid = "REPLACE_WITH_YOUR_SSID";
-//const char* password = "REPLACE_WITH_YOUR_PASSWORD";
-#include "../../wifi_credentials.inc"
+// Wifi Stuff
+WiFiClient wifi_client;
+#include "../../wifi_credentials.inc"   // defines const char *ssid, *password;
+
+// MQTT Stuff
+MqttHelper<> mqtt_helper;
+const char* mqtt_server_addr = "192.168.0.44";
+
 
 // This runs on powerup
 // -  put your setup code here, to run once:
@@ -143,7 +53,28 @@ void setup()
     SerialLog::Log(APP_NAME" says Hello");
     WifiHelper::Setup(ssid, password);
     NtpTime::Setup();
-    MqttSetup();
+    mqtt_helper.Subscribe(
+        APP_NAME"/onoff", 
+        [](String message)
+        {
+            if(message == "on")
+            {
+                SerialLog::Log("<ON>");
+            }
+            else if(message == "off")
+            {
+                SerialLog::Log("<OFF>");
+            }
+        }
+    );
+    mqtt_helper.Subscribe(
+        APP_NAME"/echo", 
+        [](String message)
+        {
+            SerialLog::Log("ECHO: " + message);
+        }
+    );
+    mqtt_helper.Setup(wifi_client, mqtt_server_addr, APP_NAME);
 }
 
 // Then this loop runs repeatedly forever
@@ -158,14 +89,15 @@ void loop()
     long now = millis();
     if (now - prev_attempt > kMqttLoopInterval) 
     {
-        MqttLoop();
+        mqtt_helper.Loop();
         prev_attempt = now;
     }
 
     // Publish every 5s
 //  static long lastMsg = 0;
 //  long now = millis();
-//  if (now - lastMsg > 5000) {
+//  if (now - lastMsg > 5000) 
+//  {
 //      lastMsg = now;
 
 //      // Convert the value to a char array
@@ -173,8 +105,10 @@ void loop()
 //      dtostrf(temperature, 1, 2, tempString);
 //      Serial.print("Temperature: ");
 //      Serial.println(tempString);
-//      mqtt_client.publish("esp32/temperature", tempString);
+//      mqtt_helper.Publish("esp32/temperature", tempString);
 //  }
 }
 
 // vim: sw=4:ts=4
+
+
