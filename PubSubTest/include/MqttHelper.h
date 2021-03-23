@@ -1,20 +1,27 @@
 //-----------------------------------------------------------------
-// MQTT Helper
+// MQTT Helpers
 //
+// MqttPubSub
+// Subscribing & Publishing to Topics
 // Currently only supports single instance per app
 // - though some of the infrastructure is in place to support multiple instances
 //  - multiple instances might be useful for connection to multiple MQTT brokers
+//
+// MqttLogger
+// Plugs into SerialLog and publishes logging content to MQTT topic
 
+#include <PubSubClient.h>   // For MQTT support
 
+// override this templated value to increase/decrease allowed topic subscriptions
 template <size_t MAX_SUBSCRIPTIONS=3>
-class MqttHelper
+class MqttPubSub
 {
 public:
 
     // call from setup()
-    void Setup(WiFiClient & wifi_client, const char* mqtt_server_addr, const char* name="MqttHelper", int mqtt_server_port=1883)
+    void Setup(WiFiClient & wifi_client, const char* mqtt_server_addr, const char* name="MqttPubSub", int mqtt_server_port=1883)
     {
-        SerialLog::Log("MqttHelper<" + String(MAX_SUBSCRIPTIONS) + ">: " + name + " " + mqtt_server_addr + ":" + String(mqtt_server_port));
+        SerialLog::Log("MqttPubSub<" + String(MAX_SUBSCRIPTIONS) + ">: " + name + " " + mqtt_server_addr + ":" + String(mqtt_server_port));
 
         strncpy(name_, name, kMaxNameLen);
         pubsubclient_.setClient(wifi_client);
@@ -84,13 +91,13 @@ private:
     // - currently just supports a single instance
     // - idea for extending to multiple instances
     //  - associate instances with topics --> use topic to look up proper instance
-    static MqttHelper * instance_;
-    static void RegisterInstance(const char* topic, MqttHelper * instance)
+    static MqttPubSub * instance_;
+    static void RegisterInstance(const char* topic, MqttPubSub * instance)
     {
         // TODO: to support multiple instances, would store instance corresponding to topic
         instance_ = instance;
     }
-    static MqttHelper * GetInstance(const char* topic)
+    static MqttPubSub * GetInstance(const char* topic)
     {
         // TODO: to support multiple instances, would lookup instance corresponding to topic
         assert( instance_ != nullptr );
@@ -103,23 +110,29 @@ private:
     //
     // So there isn't a great way to provide instance-specific callbacks
     // - the thought is that this instance discrimination can be done via the topic
-    static void Callback(const char* topic, byte* message_bytes, unsigned int length) 
+    static void Callback(const char* ch_topic, byte* message_bytes, unsigned int length) 
     {
-        SerialLog::Log("Message arrived on topic: " + String(topic));
-
+        // NOTE: Copy out the incoming values before any other processing!
+        // - underlying pubsubclient library uses the same internal buffer for incoming and outgoing
+        // messages
+        //   - see: https://pubsubclient.knolleary.net/api#callback
+        //   - this can result in data corruption if say the Log module publishes to MQTT
+        String topic(ch_topic);
         String message;
         for (int i = 0; i < length; i++) 
         {
             message += (char)message_bytes[i];
         }
-        SerialLog::Log("Message: " + message);
 
-        MqttHelper * instance = GetInstance(topic);
+//      SerialLog::Log("Message arrived on topic: " + topic);
+//      SerialLog::Log("Message: " + message);
+
+        MqttPubSub * instance = GetInstance(ch_topic);
         if (instance)
         {
             for( int i=0; i<instance->num_subscriptions_; i++)
             {
-                if (String(topic) == instance->subscriptions_[i].topic) 
+                if (topic == instance->subscriptions_[i].topic) 
                 {
                     instance->subscriptions_[i].topic_handler(message);
                 }
@@ -174,5 +187,30 @@ private:
 };
 
 template <size_t MAX_SUBSCRIPTIONS>
-MqttHelper<MAX_SUBSCRIPTIONS> * MqttHelper<MAX_SUBSCRIPTIONS>::instance_ = nullptr;
+MqttPubSub<MAX_SUBSCRIPTIONS> * MqttPubSub<MAX_SUBSCRIPTIONS>::instance_ = nullptr;
 
+
+// MqttLogger: 
+// Helper class that plugs into SerialLog to publish Log messages to MQTT
+class MqttLogger : public ILogger
+{
+public:
+    void Setup(MqttPubSub<> * mqtt_pubsub, const char * publish_topic)
+    {
+        mqtt_pubsub_ = mqtt_pubsub;
+        strncpy( publish_topic_, publish_topic, kMaxTopicLen );
+    }
+
+    // ILogger Interface overrides begin {
+    virtual void DoLog(String msg) override
+    {
+        bool ret = mqtt_pubsub_->Publish(publish_topic_, msg.c_str());
+        assert( ret );
+    }
+    // ILogger Interface overrides end }
+
+private:
+    MqttPubSub<> * mqtt_pubsub_;
+    static const size_t kMaxTopicLen = 128;
+    char publish_topic_[kMaxTopicLen];
+};

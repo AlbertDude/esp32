@@ -24,6 +24,12 @@ bool GetLocalTimeWithMs(struct tm * info, int &ms, uint32_t timeout_ms)
     return false;
 }
 
+// Interface for supplemental logger
+class ILogger
+{
+public:
+    virtual void DoLog(String msg) = 0;
+};
 
 // Logging helper
 // - wrapper around Serial.prints with timestamps
@@ -51,6 +57,12 @@ public:
         SerialLog::GetInstance().use_local_time_ = true;
     }
 
+    static void SetSupplementalLogger(ILogger * logger, const char * name = "")
+    {
+        SerialLog::GetInstance().supplemental_logger_ = logger;
+        Log(String("Added supplemental Logger: ") + name);
+    }
+
 public:
     // Prevent copies of the singleton by preventing use of copy constructor and assignment operator
     // - public access for supposedly better error messaging
@@ -60,6 +72,8 @@ public:
 private:
     unsigned long start_millis_;
     bool use_local_time_ = false;
+    ILogger * supplemental_logger_ = nullptr;
+
     SerialLog()
     {
         start_millis_ = millis();
@@ -109,13 +123,24 @@ private:
 
     void DoLog(String msg)
     {
-        Serial.println( GetLogTime() + msg );
+        String log_time = GetLogTime();
+        Serial.println( log_time + msg );
+        if( supplemental_logger_ )
+        {
+            supplemental_logger_->DoLog( log_time + msg );
+        }
     }
 
     void DoLog(tm & timeinfo, const char * format)
     {
-        Serial.print( GetLogTime() );
-        Serial.println( &timeinfo, format );
+        String log_time = GetLogTime();
+        char time_str[128];
+        strftime(time_str, 128, format, &timeinfo);
+        Serial.println( log_time + String(time_str) );
+        if( supplemental_logger_ )
+        {
+            supplemental_logger_->DoLog( log_time + time_str );
+        }
     }
 };
 

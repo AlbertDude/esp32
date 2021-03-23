@@ -1,27 +1,24 @@
-// TODO:
-// - create MqttHelper.h
-// - publish log to mqtt topic: PubSubTest/log
-
 /* PubSubTest
  *
  * MQTT sample 
  * - subscribes to `PubSubTest/test` for "on" and "off" messages
+ * - subscribes to `PubSubTest/echo` echoing any published message
+ * - publishes to `PubSubTest/Log` duplicating all content logged to SerialLog
  *
- * Also serves as samples for these helpers:
+ * Serves as samples for these helpers:
  * NtpTime
  * - syncs device local time with NTP server
  * WifiHelper
  * - helper to setup Wifi
  * - note if wifi not connecting, try pressing 'Reset' button
+ * MqttHelper
+ * - MqttPubSub - MQTT subscribing and publishing
+ * - MqttLogger - acts as supplemental logger for SerialLog
  *
  * No specific H/W setup needed
- *
- * - MQTT/PubSubClient code adapted from:
- *      https://randomnerdtutorials.com/esp32-mqtt-publish-subscribe-arduino-ide/
  */
 
 #include <Arduino.h>
-#include <PubSubClient.h>   // For MQTT support
 
 #include "../../LoopTimer/include/LoopTimer.h"
 #include "../../SerialLog/include/SerialLog.h"
@@ -41,8 +38,9 @@ WiFiClient wifi_client;
 #include "../../wifi_credentials.inc"   // defines const char *ssid, *password;
 
 // MQTT Stuff
-MqttHelper<> mqtt_helper;
+MqttPubSub<> mqtt_pubsub;
 const char* mqtt_server_addr = "192.168.0.44";
+MqttLogger mqtt_logger;
 
 
 // This runs on powerup
@@ -53,7 +51,7 @@ void setup()
     SerialLog::Log(APP_NAME" says Hello");
     WifiHelper::Setup(ssid, password);
     NtpTime::Setup();
-    mqtt_helper.Subscribe(
+    mqtt_pubsub.Subscribe(
         APP_NAME"/onoff", 
         [](String message)
         {
@@ -67,14 +65,17 @@ void setup()
             }
         }
     );
-    mqtt_helper.Subscribe(
+    mqtt_pubsub.Subscribe(
         APP_NAME"/echo", 
         [](String message)
         {
             SerialLog::Log("ECHO: " + message);
         }
     );
-    mqtt_helper.Setup(wifi_client, mqtt_server_addr, APP_NAME);
+    mqtt_pubsub.Setup( wifi_client, mqtt_server_addr, APP_NAME );
+
+    mqtt_logger.Setup( &mqtt_pubsub, APP_NAME"/Log" );
+    SerialLog::SetSupplementalLogger( &mqtt_logger, "MqttLogger" );
 }
 
 // Then this loop runs repeatedly forever
@@ -89,24 +90,9 @@ void loop()
     long now = millis();
     if (now - prev_attempt > kMqttLoopInterval) 
     {
-        mqtt_helper.Loop();
+        mqtt_pubsub.Loop();
         prev_attempt = now;
     }
-
-    // Publish every 5s
-//  static long lastMsg = 0;
-//  long now = millis();
-//  if (now - lastMsg > 5000) 
-//  {
-//      lastMsg = now;
-
-//      // Convert the value to a char array
-//      char tempString[8];
-//      dtostrf(temperature, 1, 2, tempString);
-//      Serial.print("Temperature: ");
-//      Serial.println(tempString);
-//      mqtt_helper.Publish("esp32/temperature", tempString);
-//  }
 }
 
 // vim: sw=4:ts=4
