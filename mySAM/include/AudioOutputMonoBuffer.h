@@ -12,6 +12,8 @@
 class AudioOutputMonoBuffer : public AudioOutput
 {
   public:
+    AudioOutputMonoBuffer() {};
+
     AudioOutputMonoBuffer(int buffer_len)
     {
       buffer_len_ = buffer_len;
@@ -106,6 +108,26 @@ class AudioOutputMonoBuffer : public AudioOutput
     int buffer_len_;
     int write_index_;
     unsigned int num_overflows_;
+};
+
+// AudioOutputMonoBuffer variant that uses a static buffer rather than dynamically allocated
+class AudioOutputMonoBufferS : public AudioOutputMonoBuffer
+{
+  public:
+    AudioOutputMonoBufferS(int buffer_len, void * buffer)
+    {
+      buffer_len_ = buffer_len;
+      assert(buffer_);
+      buffer_ = (uint8_t*)buffer;
+      Reset();
+    }
+
+    AudioOutputMonoBufferS() = delete;
+    AudioOutputMonoBufferS(int buffer_len) = delete;
+
+    virtual ~AudioOutputMonoBufferS() override
+    {
+    }
 };
 
 #endif

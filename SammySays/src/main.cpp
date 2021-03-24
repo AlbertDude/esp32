@@ -48,7 +48,6 @@ SPKR   ▽     │      ┌───║BYPASS        IN-║
 #include <Arduino.h>
 #include <ESP8266SAM.h>
 #include <WiFi.h>
-#include <PubSubClient.h>
 
 #include "../../mySAM/include/AudioOutputMonoBuffer.h"
 #include "../../SerialLog/include/SerialLog.h"
@@ -56,6 +55,11 @@ SPKR   ▽     │      ┌───║BYPASS        IN-║
 #include "../../Switch/include/Switch.h"
 #include "../../DAC/include/Dac.h"
 #include "../../DAC/include/DacVisualizer.h"
+#include "../../PubSubTest/include/WifiHelper.h"
+#include "../../PubSubTest/include/NtpTime.h"
+#include "../../PubSubTest/include/MqttHelper.h"
+
+#define APP_NAME "SammySays"
 
 //-----------------------------------------------------------------
 // Dac and SAM helpers
@@ -97,13 +101,15 @@ const char* kVoiceNames[] = {
 
 void SayIt(const char* phrase)
 {
+    SerialLog::Log("Sammy says: " + String(phrase));
     out->Reset();
     // This is a blocking call, i.e. buffer is complete upon return
     sam->Say(out, phrase);
-    SerialLog::Log("buf Hz, bsp, #ch: " + String(out->hertz) + ", " + String(out->bps) + ", " + String(out->channels));
-    SerialLog::Log("buf used: " + String(out->GetBufUsed()));
-    SerialLog::Log("buf ovrflw: " + String(out->GetNumBufOverflows()));
-    SerialLog::Log("sample range: " + String(out->min_val_) + " -> " + String(out->max_val_));
+//  SerialLog::Log("buf Hz, bsp, #ch: " + String(out->hertz) + ", " + String(out->bps) + ", " + String(out->channels));
+//  SerialLog::Log("sample range: " + String(out->min_val_) + " -> " + String(out->max_val_));
+//  SerialLog::Log("buf used: " + String(out->GetBufUsed()));
+    if(out->GetNumBufOverflows() > 0)
+        SerialLog::Log("buf ovrflw: " + String(out->GetNumBufOverflows()));
 
     dac.SetBuffer(out->GetBuf(), out->GetBufUsed(), out->bps);
     dac.Restart();
@@ -128,126 +134,15 @@ void HelpVoices()
 //-----------------------------------------------------------------
 // Wifi and MQTT helpers
 
-// Bring in WIFI SSID/Password combination, e.g.:
-//const char* ssid = "REPLACE_WITH_YOUR_SSID";
-//const char* password = "REPLACE_WITH_YOUR_PASSWORD";
-#include "../../wifi_credentials.inc"
-
-// Add your MQTT Broker IP address, example:
-const char* mqtt_server = "192.168.0.44";
-
+// Wifi Stuff
 WiFiClient wifi_client;
-PubSubClient mqtt_client(wifi_client);
-const long kReconnectAttemptInterval = 5000; // Try reconnections every 5 s
+#include "../../wifi_credentials.inc"   // defines const char *ssid, *password;
 
-// Subscribe topics
-#define TOPIC_SAY "SammySays/say"
-#define TOPIC_CONTROL "SammySays/control"
+// MQTT Stuff
+MqttPubSub<> mqtt_pubsub;
+const char* mqtt_server_addr = "192.168.0.44";
+MqttLogger mqtt_logger;
 
-// Publish topics
-// NONE
-
-void SetupWifi() 
-{
-    delay(10);
-    // We start by connecting to a WiFi network
-    SerialLog::Log("Connecting to " + String(ssid));
-
-    WiFi.begin(ssid, password);
-
-    while (WiFi.status() != WL_CONNECTED) 
-    {
-        delay(500);
-        Serial.print(".");
-    }
-    SerialLog::Log("WiFi connected to IP Address: " + WiFi.localIP().toString());
-}
-
-void Callback(char* topic, byte* message_bytes, unsigned int length) 
-{
-    SerialLog::Log("Message arrived on topic: " + String(topic));
-
-    String message;
-
-    for (int i = 0; i < length; i++) 
-    {
-        message += (char)message_bytes[i];
-    }
-    message.trim(); // remove leading/trailing whitespace
-    SerialLog::Log("Message: " + message);
-
-    if (String(topic) == TOPIC_SAY) 
-    {
-        // message is the phrase to speak
-        SayIt(message.c_str());
-    }
-    else if (String(topic) == TOPIC_CONTROL) 
-    {
-        // "voice N"
-        // "voice ?"
-        if (message.startsWith("voice"))
-        {
-            message.remove(0, message.indexOf(' ')+1);
-
-            if (message.startsWith("?"))
-                HelpVoices();
-            else
-            {
-                int voice_index = message.toInt();
-                SerialLog::Log("Voice index: " + String(voice_index));
-                SetVoice(voice_index);
-            }
-        }
-    }
-}
-
-boolean ReconnectNonBlocking() 
-{
-    bool connected = mqtt_client.connect("ESP32Client");
-    if (connected)
-    {
-        SerialLog::Log("connected");
-        // subscriptions
-        mqtt_client.subscribe(TOPIC_SAY);
-        mqtt_client.subscribe(TOPIC_CONTROL);
-    }
-    return connected;
-}
-
-void ReconnectBlocking() 
-{
-    // Loop until we're reconnected
-    while (!mqtt_client.connected()) 
-    {
-        SerialLog::Log("Attempting MQTT connection...");
-        // Attempt to connect
-        if (!ReconnectNonBlocking())
-        {
-            SerialLog::Log("Failed, rc=" + String(mqtt_client.state()));
-            SerialLog::Log("Retry in 5 seconds");
-            delay(kReconnectAttemptInterval); // Wait before retrying
-        }
-    }
-}
-
-void MqttLoop()
-{
-    if (!mqtt_client.connected()) 
-    {
-        static long prev_attempt = 0;
-        long now = millis();
-        if (now - prev_attempt > kReconnectAttemptInterval) 
-        {
-            // Attempt to reconnect
-            ReconnectNonBlocking();
-            prev_attempt = now;
-        }
-    } 
-    else 
-    {
-        mqtt_client.loop();
-    }
-}
 
 //-----------------------------------------------------------------
 
@@ -256,20 +151,61 @@ void MqttLoop()
 void setup() {
     Serial.begin(115200); // for serial link back to computer
     SerialLog::Log(__FILE__);
+    WifiHelper::Setup(ssid, password);
+    NtpTime::Setup();
 
-    SetupWifi();
-    mqtt_client.setServer(mqtt_server, 1883);
-    mqtt_client.setCallback(Callback);
+    mqtt_pubsub.Subscribe(
+        APP_NAME"/say", 
+        [](String message)
+        {
+            // message is the phrase to speak
+            SayIt(message.c_str());
+        }
+    );
+    mqtt_pubsub.Subscribe(
+        APP_NAME"/control", 
+        [](String message)
+        {
+            // "voice N"
+            // "voice ?"
+            if (message.startsWith("voice"))
+            {
+                message.remove(0, message.indexOf(' ')+1);
+
+                if (message.startsWith("?"))
+                    HelpVoices();
+                else
+                {
+                    int voice_index = message.toInt();
+                    SetVoice(voice_index);
+                }
+            }
+        }
+    );
+    mqtt_pubsub.Setup( wifi_client, mqtt_server_addr, APP_NAME );
+
+    mqtt_logger.Setup( &mqtt_pubsub, APP_NAME"/Log" );
+    SerialLog::SetSupplementalLogger( &mqtt_logger, "MqttLogger" );
 
     pinMode(LED_BUILTIN, OUTPUT);
 
     // SAM generates 22050 Hz, 8 bit, 1 channel
+
+    // In practice, able to dynamically allocate a bigger buffer than can statically allocate
+    //  - static data goes into dram0_0_seg which defaults to 124580 bytes
+    //      - see ../../output.map
+    //  - general usage takes about 40 kBytes, and so we can't match the 110,000
+    //  kBytes we've been using via dynamic allocation
+    //  - using static buffer might be useful if we're willing to go to the trouble of rejiggin the
+    //  default memory layout
+#if 1
     out = new AudioOutputMonoBuffer(110000 /* buffSizeSamples */);   // TODO: crappy that we need to set bufSz up front. Better if the TTS lib returned a buffer of appropriate size
+#else
+    static uint8_t buffer[80000];
+    out = new AudioOutputMonoBufferS(80000, buffer);   // TODO: crappy that we need to set bufSz up front. Better if the TTS lib returned a buffer of appropriate size
+#endif
     out->begin();
     sam = new ESP8266SAM;
-
-    // Initial mqtt connection
-    ReconnectBlocking();
 }
 
 // Then this loop runs repeatedly forever
@@ -277,17 +213,13 @@ void setup() {
 void loop() {
     loop_timer.Loop();     // by itself, typically 695,400 calls/sec
 
-    // throttle calling rate of MqttLoop
-    // Call rates for different throttling rates
-    //  339,000 ( 5ms, 200Hz)
-    //  341,000 (10ms, 100Hz)
-    //  342,000 (17ms,  60Hz)
-    const long kMqttLoopInterval = 5; // Process MqttLoop every 5 ms (200 Hz)
+    // throttle calling rate of Mqtt Loop
+    const long kMqttLoopInterval = 5; // Process Mqtt Loop every 5 ms (200 Hz)
     static long prev_attempt = 0;
     long now = millis();
     if (now - prev_attempt > kMqttLoopInterval) 
     {
-        MqttLoop();
+        mqtt_pubsub.Loop();
         prev_attempt = now;
     }
 

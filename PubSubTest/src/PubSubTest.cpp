@@ -84,8 +84,8 @@ void loop()
 {
     loop_timer.Loop();     // by itself, typically 695,400 calls/sec
 
-    // throttle calling rate of MqttLoop
-    const long kMqttLoopInterval = 5; // Process MqttLoop every 5 ms (200 Hz)
+    // throttle calling rate of Mqtt Loop
+    const long kMqttLoopInterval = 5; // Process Mqtt Loop every 5 ms (200 Hz)
     static long prev_attempt = 0;
     long now = millis();
     if (now - prev_attempt > kMqttLoopInterval) 

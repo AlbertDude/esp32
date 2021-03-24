@@ -235,7 +235,7 @@ public:
                 else
                 {
                     done_ = true;
-                    SerialLog::Log("DAC is done");
+                    //SerialLog::Log("DAC is done");
                 }
             }
 
@@ -349,7 +349,7 @@ private:
             else
             {
                 instance->done_ = true;
-                SerialLog::Log("DAC is done");
+                //SerialLog::Log("DAC is done");
             }
         }
     }
@@ -510,7 +510,7 @@ public:
                     {
                         done_ = true;
                         i2s_output_->stop();
-                        SerialLog::Log("DAC is done");
+                        //SerialLog::Log("DAC is done");
                     }
                 }
             }
