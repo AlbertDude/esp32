@@ -149,6 +149,10 @@ MqttLogger mqtt_logger;
 // This runs on powerup
 // -  put your setup code here, to run once:
 void setup() {
+    // Turn on LED while setting up, connecting to wifi
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
+
     Serial.begin(115200); // for serial link back to computer
     SerialLog::Log(__FILE__);
     WifiHelper::Setup(ssid, password);
@@ -187,8 +191,6 @@ void setup() {
     mqtt_logger.Setup( &mqtt_pubsub, APP_NAME"/Log" );
     SerialLog::SetSupplementalLogger( &mqtt_logger, "MqttLogger" );
 
-    pinMode(LED_BUILTIN, OUTPUT);
-
     // SAM generates 22050 Hz, 8 bit, 1 channel
 
     // In practice, able to dynamically allocate a bigger buffer than can statically allocate
@@ -206,6 +208,11 @@ void setup() {
 #endif
     out->begin();
     sam = new ESP8266SAM;
+
+    SayIt("Sammy says, Hello world!");
+
+    // Turn off LED after finished setting up
+    digitalWrite(LED_BUILTIN, LOW);
 }
 
 // Then this loop runs repeatedly forever
