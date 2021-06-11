@@ -47,11 +47,13 @@
 // E.g. for an ATtiny @ 128 kHz: the datasheet states that both the high and low
 // SPI clock pulse must be > 2 CPU cycles, so take 3 cycles i.e. divide target
 // f_cpu by 6:
-//     #define SPI_CLOCK            (128000/6)
-//
-// A clock slow enough for an ATtiny85 @ 1 MHz, is a reasonable default:
-#define SPI_CLOCK     (128000/6)
-//#define SPI_CLOCK 		(1000000/6)
+#define SPI_CLOCK      (128000/6)
+
+// For ATtiny85, internal clock is 8 MHz
+// - 8 MHz / 64 = 125000
+// - if set clock prescaler to 128 or 256, need to reduce SPI clock for further programming
+// - can make the change and then do an avrdude erase command (-e), and revert to the original SPI CLOCK value
+//#define SPI_CLOCK     (32000/6)     
 
 
 // Select hardware or software SPI, depending on SPI clock.
